@@ -75,12 +75,30 @@ def _patch2(path, edits, tag, marker):
     print(f"{tag}: {marker} registered")
 
 
+CLASS_ADD3 = '''    elif name == "smolvla_speedaug":
+        from .smolvla_spline.smolvla_speedaug import SmolVLASpeedAugPolicy
+
+        return SmolVLASpeedAugPolicy
+'''
+CFG_ADD3 = '''    elif policy_type == "smolvla_speedaug":
+        from .smolvla_spline.smolvla_speedaug import SmolVLASpeedAugConfig
+
+        return SmolVLASpeedAugConfig(**kwargs)
+'''
+INIT_ADD3 = (
+    "from .smolvla_spline.smolvla_speedaug import "
+    "SmolVLASpeedAugConfig as SmolVLASpeedAugConfig\n"
+)
+
+
 def main(path):
     init_path = os.path.join(os.path.dirname(path), "__init__.py")
     _patch(path, [(CLASS_ANCHOR, CLASS_ADD), (CFG_ANCHOR, CFG_ADD)], "factory.py")
     _patch(init_path, [(INIT_ANCHOR, INIT_ADD)], "policies/__init__.py")
     _patch2(path, [(CLASS_ANCHOR, CLASS_ADD2), (CFG_ANCHOR, CFG_ADD2)], "factory.py", "smolvla_interp")
     _patch2(init_path, [(INIT_ANCHOR, INIT_ADD2)], "policies/__init__.py", "smolvla_interp")
+    _patch2(path, [(CLASS_ANCHOR, CLASS_ADD3), (CFG_ANCHOR, CFG_ADD3)], "factory.py", "smolvla_speedaug")
+    _patch2(init_path, [(INIT_ANCHOR, INIT_ADD3)], "policies/__init__.py", "smolvla_speedaug")
 
 
 if __name__ == "__main__":

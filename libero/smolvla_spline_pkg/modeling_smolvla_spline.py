@@ -86,6 +86,11 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
         super().__init__(config, **kwargs)
         self._init_spline_operators(config)
 
+    def reset(self):
+        super().reset()
+        self._prev_step_vel = None  # start each episode at rest (chain_velocity)
+        self.n_chunks_generated = 0  # policy invocations this episode (analysis hook)
+
     # ------------------------------------------------------------------ setup
     def _init_spline_operators(self, cfg: SmolVLASplineConfig):
         n, deg = cfg.n_ctrl, cfg.spline_degree
@@ -166,6 +171,27 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
         T = torch.where(any_ev, first, torch.full_like(first, cfg.horizon_max))
         return T.clamp(cfg.min_seg, cfg.horizon_max)
 
+    # ------------------------------------------- speed-heterogeneous demos
+    def _speed_factors(self, batch: dict[str, Tensor], dtype, device) -> Tensor:
+        """Per-sample synthetic slowdown s = speed_aug[episode_index % len]."""
+        ep = batch.get("episode_index")
+        if ep is None:
+            raise ValueError("speed_aug requires 'episode_index' in the batch")
+        s_vals = torch.tensor(self.config.speed_aug, dtype=dtype, device=device)
+        return s_vals[ep.long().view(-1) % len(s_vals)]                # (B,)
+
+    @staticmethod
+    def _lerp_path(path: Tensor, x: Tensor) -> Tensor:
+        """Linear interp of cumulative path (B, K, D) at fractional indices x (B, M)."""
+        K = path.shape[1]
+        x0 = x.floor().long().clamp(0, K - 1)
+        x1 = (x0 + 1).clamp(max=K - 1)
+        w = (x - x0.to(x.dtype)).unsqueeze(-1)
+        D = path.shape[-1]
+        g0 = path.gather(1, x0.unsqueeze(-1).expand(-1, -1, D))
+        g1 = path.gather(1, x1.unsqueeze(-1).expand(-1, -1, D))
+        return g0 * (1 - w) + g1 * w                                   # (B, M, D)
+
     # ------------------------------------------------------------ target build
     def _build_spline_targets(self, batch: dict[str, Tensor]) -> Tensor:
         """(B, H, 7) raw delta actions -> (B, n_ctrl, 8) normalized spline targets."""
@@ -190,6 +216,20 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             path = torch.cat(
                 [torch.zeros_like(pose[:, :1]), torch.cumsum(pose, dim=1)], dim=1
             )
+            H = cfg.horizon
+            if cfg.speed_aug:
+                # Synthetic slow demo: the chunk is the first `horizon` steps of
+                # the path executed s x slower = path prefix up to raw index H/s,
+                # sampled at H+1 synthetic ticks. Speed contaminates the shape
+                # target here — that is the phenomenon under study.
+                s = self._speed_factors(batch, path.dtype, path.device)  # (B,)
+                j = torch.arange(H + 1, dtype=path.dtype, device=path.device)
+                path = self._lerp_path(path, j.unsqueeze(0) / s.unsqueeze(1))
+                gx = (
+                    (torch.arange(H, dtype=path.dtype, device=path.device).unsqueeze(0)
+                     / s.unsqueeze(1)).round().long().clamp(max=H - 1)
+                )                                                       # (B, H)
+                grip = grip.gather(1, gx)
             p_end = path[:, -1:, :]                                    # (B, 1, 6)
             resid = path - self._b_last.unsqueeze(0) * p_end           # (B, H+1, 6)
             c_mid = torch.einsum("mh,bhd->bmd", self._pinv_mid, resid)
@@ -217,7 +257,14 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             c_mid = torch.einsum("bmh,bhd->bmd", pm, resid)            # (B, n-2, 6)
             c_pose = torch.cat([torch.zeros_like(p_end), c_mid, p_end], dim=1)
             c_grip = torch.einsum("bnh,bh->bn", pg, grip)              # (B, n)
-            dur = torch.log(T.to(pose.dtype)).unsqueeze(-1).expand(-1, cfg.n_ctrl)
+            T_lab = T.to(pose.dtype)
+            if cfg.speed_aug:
+                # Time allocation factorizes shape from timing: the slowed demo
+                # has the SAME event-segmented spatial chunk (fit above is
+                # untouched); only the duration label scales. This one line is
+                # the representation-level hypothesis of the speed-aug study.
+                T_lab = T_lab * self._speed_factors(batch, pose.dtype, pose.device)
+            dur = torch.log(T_lab).unsqueeze(-1).expand(-1, cfg.n_ctrl)
 
         tgt = torch.cat([c_pose, c_grip.unsqueeze(-1), dur.unsqueeze(-1)], dim=-1)
         return (tgt - self._tgt_mean) / self._tgt_std                  # (B, n, 8)
@@ -247,21 +294,36 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
         return loss, loss_dict
 
     # ----------------------------------------------------------------- decode
-    def _predicted_T(self, tokens_unnorm: Tensor) -> int:
-        """Read the duration channel -> chunk duration in TRAINING-rate env steps."""
+    def _predicted_T_batch(self, tokens_unnorm: Tensor) -> Tensor:
+        """Per-sample predicted chunk duration (TRAINING-rate env steps), (B,)."""
         cfg = self.config
         logT = tokens_unnorm[..., 7].mean(dim=1)          # (B,) average over tokens
-        T = torch.exp(logT).round().long()
-        T = T.clamp(cfg.min_seg, cfg.horizon_max)
-        # batched eval with heterogeneous durations needs a rectangular tensor;
-        # use the median (eval runs batch_size=1 in practice)
-        return int(T.median().item())
+        T = torch.exp(logT).round().long().clamp(cfg.min_seg, cfg.horizon_max)
+        thr = getattr(cfg, "duration_snap_threshold", None)
+        if thr is not None:
+            # bimodal-target fix: cap-chunk predictions smear toward ~30 (measured
+            # bias -9.5), making transports execute ~33% faster than their fitted
+            # shape intended; snap them back to the cap.
+            T = torch.where(T >= thr, torch.full_like(T, cfg.horizon_max), T)
+        return T
+
+    def _predicted_T(self, tokens_unnorm: Tensor) -> int:
+        """Scalar duration for decode: batched eval with heterogeneous durations
+        needs a rectangular tensor; use the median (eval runs batch_size=1)."""
+        return int(self._predicted_T_batch(tokens_unnorm).median().item())
 
     def _decode_tokens(self, tokens: Tensor, h_exec: int) -> Tensor:
         """(B, n_ctrl, >=8) normalized tokens -> (B, h_exec, 7) env delta actions."""
         t = tokens[:, :, : self._N_OUT] * self._tgt_std + self._tgt_mean
         c_pose = t[..., :6].clone()
         c_pose[:, 0, :] = 0.0  # hard guarantee: chunk starts at the current pose
+        if self.config.chain_velocity:
+            # velocity continuity across replans: clamped cubic with interior
+            # span 1/3 has s'(0) = 9*(c1 - c0) in u-units; per-step v0 = 9*c1/h.
+            # Set c1 so v0 equals the previous chunk's replan-point velocity.
+            v_prev = getattr(self, "_prev_step_vel", None)
+            if v_prev is not None:
+                c_pose[:, 1, :] = v_prev.to(c_pose.device) * h_exec / 9.0
         c_grip = t[..., 6]
 
         dev = tokens.device
@@ -290,6 +352,18 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
         g = torch.einsum("hn,bn->bh", Bg.to(dev), c_grip)
         grip = torch.where(g >= 0, 1.0, -1.0).unsqueeze(-1)
 
+        if self.config.chain_velocity:
+            # per-step velocity at the upcoming replan point u_c = consumed/h,
+            # via central finite difference of the basis (float64, exact enough)
+            u_c = min(self.config.n_action_steps, h_exec) / h_exec
+            du = 1e-5
+            u_pair = torch.tensor([max(u_c - du, 0.0), min(u_c + du, 1.0)],
+                                  dtype=torch.float64, device=dev)
+            Bp2 = bspline_basis(u_pair, self.config.n_ctrl, self.config.spline_degree).float().to(dev)
+            pts = torch.einsum("hn,bnd->bhd", Bp2, c_pose)             # (B, 2, 6)
+            s_prime = (pts[:, 1] - pts[:, 0]) / float(u_pair[1] - u_pair[0])
+            self._prev_step_vel = (s_prime / h_exec).detach()          # (B, 6) per-step
+
         return torch.cat([deltas, grip], dim=-1)                       # (B, h_exec, 7)
 
     def _get_action_chunk(self, batch: dict[str, Tensor], noise: Tensor | None = None, **kwargs) -> Tensor:
@@ -311,14 +385,30 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             # steps); retarget to the execution rate. The queue consumes up to
             # n_action_steps of it, so short chunks trigger earlier replanning.
             t_un = tokens[:, :, : self._N_OUT] * self._tgt_std + self._tgt_mean
+            self.last_predicted_T_batch = self._predicted_T_batch(t_un)  # (B,) analysis hook
             T = self._predicted_T(t_un)
+            self.last_predicted_T = T  # scalar hook for recording tools
             alpha = 1.0
             if self.config.speedup_alpha < 1.0 and T > self.config.speedup_T_threshold:
                 alpha = self.config.speedup_alpha  # duration-aware selective speedup
             h_exec = max(2, round(T * self.config.exec_rate_ratio * alpha))
         else:
             h_exec = self.config.exec_horizon or self.config.horizon
-        return self._decode_tokens(tokens, h_exec)
+        chunk = self._decode_tokens(tokens, h_exec)
+        if self.config.predict_duration and self.config.replan_frac is not None:
+            # Self-paced replanning: execute replan_frac of the chunk's own
+            # predicted duration, then let the queue drain -> replan. The
+            # duration head, not a fixed cadence, schedules the replans.
+            n_exec = max(2, min(int(round(chunk.shape[1] * self.config.replan_frac)), chunk.shape[1]))
+            chunk = chunk[:, :n_exec]
+        elif self.config.predict_duration and self.config.replan_margin is not None:
+            # Absolute-margin variant: replan a fixed few steps BEFORE the
+            # predicted chunk end, so predicted events (gripper toggles) are
+            # never placed at the chunk boundary where duration error clips them.
+            n_exec = max(2, chunk.shape[1] - self.config.replan_margin)
+            chunk = chunk[:, :n_exec]
+        self.n_chunks_generated = getattr(self, "n_chunks_generated", 0) + 1
+        return chunk
 
 
 def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.smolvla_spline.modeling_smolvla_spline
@@ -346,9 +436,22 @@ def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.s
     a = torch.tensor(rng.uniform(-0.6, 0.6, size=(2, H, 7)), dtype=torch.float32)
     a[..., 6] = torch.where(a[..., 6] > 0, 1.0, -1.0)
 
-    class _Cfg:  # minimal duck-typed config for operator init
-        n_ctrl, horizon, spline_degree, spline_stats_file = n, H, deg, "spline_stats_libero.json"
+    class _StubBase:  # complete decode-flag defaults; extend for variants
         predict_duration = False
+        chain_velocity = False
+        feasibility_stretch = False
+        actuator_bound = 1.0
+        speedup_alpha = 1.0
+        speedup_T_threshold = 0
+        exec_rate_ratio = 1.0
+        exec_horizon = None
+        n_action_steps = 10
+        replan_frac = None
+        replan_margin = None
+        speed_aug = None
+
+    class _Cfg(_StubBase):  # minimal duck-typed config for operator init
+        n_ctrl, horizon, spline_degree, spline_stats_file = n, H, deg, "spline_stats_libero.json"
 
     class _Holder(torch.nn.Module):
         _POSE_DIMS = SmolVLASplinePolicy._POSE_DIMS
@@ -375,12 +478,11 @@ def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.s
         assert e < 1e-4 or h_exec < H  # low rates may clip => endpoint may deviate
 
     # ---------------- v2: event detection + variable-length fit ----------------
-    class _CfgV2:
+    class _CfgV2(_StubBase):
         n_ctrl, horizon, spline_degree = n, H, deg
         predict_duration, horizon_max, min_seg, pause_frac = True, 40, 6, 0.15
         spline_stats_file = "spline_stats_libero.json"
         spline_stats_file_v2 = "spline_stats_libero_v2.json"
-        exec_rate_ratio = 1.0
 
     class _HolderV2(torch.nn.Module):
         _POSE_DIMS = SmolVLASplinePolicy._POSE_DIMS
@@ -411,7 +513,67 @@ def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.s
     e0 = (un[0, -1, :6] - a2[0, :12, :6].sum(0)).abs().max().item()
     print(f"v2 variable-length fit endpoint err: {e0:.2e}")
     assert e0 < 1e-4
-    print("SELF-TEST PASSED (v1 + v2)")
+    # ---------------- speed-aug: shape/timing factorization math ----------------
+    # v1 (B arm): with constant deltas d, the s-slowed chunk covers d*H/s of path
+    # -> pinned endpoint control point must be exactly p_end/s.
+    class _CfgSaug(_Cfg):
+        speed_aug = [1.0, 2.0]
+
+    a3 = torch.zeros(2, H, 7)
+    a3[..., :6] = 0.25
+    a3[..., 6] = 1.0
+    hs = _Holder()
+    SmolVLASplinePolicy._init_spline_operators(hs, _CfgSaug)
+    obj = type("obj", (), {"config": _CfgSaug, "_POSE_DIMS": 6, "_N_OUT": 8,
+                           "_pinv_mid": hs._pinv_mid, "_b_last": hs._b_last,
+                           "_pinv_grip": hs._pinv_grip, "_tgt_mean": hs._tgt_mean,
+                           "_tgt_std": hs._tgt_std,
+                           "_speed_factors": SmolVLASplinePolicy._speed_factors,
+                           "_lerp_path": staticmethod(SmolVLASplinePolicy._lerp_path)})()
+    obj._speed_factors = SmolVLASplinePolicy._speed_factors.__get__(obj)
+    tgt3 = SmolVLASplinePolicy._build_spline_targets(
+        obj, {ACTION: a3, "episode_index": torch.tensor([0, 1])})
+    un3 = tgt3 * hs._tgt_std + hs._tgt_mean
+    end_s1 = un3[0, -1, :6]                       # s=1: full-chunk displacement
+    end_s2 = un3[1, -1, :6]                       # s=2: half of it
+    e = (end_s2 - end_s1 / 2).abs().max().item()
+    print(f"speed-aug v1: s=2 endpoint == s=1 endpoint / 2, err {e:.2e}")
+    assert e < 1e-5
+
+    # v2 (C arm): shape control points must be IDENTICAL across s (factorization);
+    # only the duration channel scales: logT' = logT + log s.
+    class _CfgV2S(_CfgV2):
+        speed_aug = [1.0, 2.0]
+
+    h3 = _HolderV2()
+    h3.config = _CfgV2S
+    SmolVLASplinePolicy._init_spline_operators(h3, _CfgV2S)
+    h3._first_event = SmolVLASplinePolicy._first_event.__get__(h3)
+    h3._speed_factors = SmolVLASplinePolicy._speed_factors.__get__(h3)
+    a4 = torch.zeros(2, 40, 7)
+    a4[..., :6] = 0.3
+    a4[..., 6] = -1.0
+    a4[:, 12:, 6] = 1.0                          # same toggle at k=12 in both samples
+    tgt4 = SmolVLASplinePolicy._build_spline_targets(
+        h3, {ACTION: a4, "episode_index": torch.tensor([0, 1])})
+    un4 = tgt4 * h3._tgt_std + h3._tgt_mean
+    shape_diff = (un4[0, :, :7] - un4[1, :, :7]).abs().max().item()
+    T0 = float(torch.exp(un4[0, :, 7].mean()))
+    T1 = float(torch.exp(un4[1, :, 7].mean()))
+    print(f"speed-aug v2: shape ctrl-pt diff across s = {shape_diff:.2e} (expect 0); "
+          f"durations {T0:.1f}/{T1:.1f} (expect 12/24)")
+    assert shape_diff < 1e-6 and abs(T0 - 12) < 0.1 and abs(T1 - 24) < 0.1
+
+    # ------------- velocity-chaining math: s'(0) coefficient + continuity -------------
+    u_pair = torch.tensor([0.0, 1e-6], dtype=torch.float64)
+    Bp = bspline_basis(u_pair, n, deg)
+    dB0 = (Bp[1] - Bp[0]) / 1e-6                     # basis derivative at u=0
+    # s'(0) = sum_i c_i B_i'(0); with c = e1 (only c1=1): expect +9
+    coeff = float(dB0[1])
+    print(f"velocity coefficient s'(0) per c1: {coeff:.4f} (expect 9)")
+    assert abs(coeff - 9.0) < 1e-3
+
+    print("SELF-TEST PASSED (v1 + v2 + chaining math)")
 
 
 if __name__ == "__main__":

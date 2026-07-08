@@ -10,6 +10,8 @@
 | 3 | **nas sweep** {5,10,20,50} × {A,B,C} native | replan-cadence confound is real (A: 60→93); pre-empt "you tuned it" | 12 evals |
 | 4 | **n_ctrl ablation** {4,6,8} policy-level (20k pilots) + **unpinned-c₀ ablation** | representation-choice defense + boundary-continuity design justification | 4×80min train + evals |
 | 5 | **Duration-head calibration**: T̂ vs event-truth on held-out demos (R², by event type) + per-episode T̂ timeline figure | proves the head *learned* duration; flagship figure | offline analysis |
+
+  *Implementation spec for #5 (ready to execute):* (a) dataset-side calibration: build the training dataloader exactly as lerobot-train does (make_dataset + policy preprocessor), hold out episodes ≥1600; for each batch run `model.sample_actions` (or forward the clean target path), unnormalize channel 7 → T̂; event-truth T from `_first_event` on the same fetched window; report R², MAE, calibration curve, split by event type (gripper/pause/cap). (b) rollout-side timeline: `record_rollouts.py` + the `policy.last_predicted_T` attribute (already instrumented) — log T̂ per replan through full episodes; figure: T̂ staircase overlaid with gripper events (expect T̂ ↘ as grasp approaches). (c) velocity-continuous chunk chaining (new design item from the jerk table): pin c₁ of each new chunk to the previous chunk's terminal derivative → removes the remaining boundary discontinuity (boundary_ratio ~4 → ~1); train a pilot with it.
 | 6 | Smoothness/jerk table (running) + analytic-velocity continuity figure | C² claim quantified; velocity-FF story | ~done + plotting |
 | 7 | Pin down true control dt / dataset rate (robosuite config + demo stats) | physical-units correctness | 1h investigation |
 

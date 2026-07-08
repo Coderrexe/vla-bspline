@@ -50,6 +50,43 @@ class SmolVLASplineConfig(SmolVLAConfig):
     speedup_alpha: float = 1.0        # <1.0 = faster execution of long chunks
     speedup_T_threshold: int = 0      # apply alpha only when predicted T > this
 
+    # Duration mode-snap (decode-only): the duration target is bimodal
+    # (events ~22 vs cap 40); flow matching smears cap chunks down to ~30,
+    # making transports execute ~33% faster than their fitted shape intended
+    # (measured: cap bias -9.5, event MAE 3.7 / r=0.84). Snap T-hat >= threshold
+    # back to horizon_max so transport chunks run at intended speed.
+    duration_snap_threshold: int | None = None
+
+    # --- speed-heterogeneous demonstrations (training-time experiment) ---
+    # Per-episode synthetic speed factor s = speed_aug[episode_index % len]:
+    # the same spatial path executed s x slower (s >= 1 only: speeding up the
+    # commanded path would clip deltas at the [-1,1] actuator bound).
+    # v1 (fixed-T): the chunk becomes the first `horizon` SYNTHETIC steps of the
+    #   slowed path -> shape supervision is speed-contaminated (the point).
+    # v2 (time alloc): event segmentation + shape fit stay on the RAW segment;
+    #   ONLY the duration label scales to s*T -> shape supervision stays exact.
+    # Stats files must be regenerated for the augmented distributions.
+    speed_aug: list[float] | None = None
+
+    # Self-paced replanning (v2 decode-only): execute replan_frac of each
+    # chunk's PREDICTED duration before replanning, instead of a fixed
+    # n_action_steps cadence. The policy's own duration head schedules the
+    # replans (chunks end at motion events, so replans align with events).
+    # Requires n_action_steps >= horizon_max so the fixed cadence never cuts
+    # a chunk short. None = fixed-cadence behavior (default).
+    replan_frac: float | None = None
+    # Variant: replan a FIXED number of steps before the predicted chunk end
+    # (absolute margin, not fractional). Tests the boundary-clipping hypothesis:
+    # executing exactly TO the predicted event places gripper toggles at chunk
+    # boundaries where duration error clips them; a small margin should recover.
+    replan_margin: int | None = None
+
+    # Velocity-continuous chunk chaining (decode-only): pin the new chunk's
+    # second control point so its initial velocity matches the previous chunk's
+    # velocity at the replan point. Removes the replan-boundary velocity
+    # discontinuity (measured boundary_ratio ~4) that c0-pinning alone leaves.
+    chain_velocity: bool = False
+
     # --- overridden SmolVLA defaults ---
     chunk_size: int = 6       # forced to n_ctrl in __post_init__
     n_action_steps: int = 10  # env steps consumed per model invocation (replan horizon)
@@ -73,12 +110,35 @@ class SmolVLASplineConfig(SmolVLAConfig):
         PreTrainedConfig.__post_init__(self)
 
         self.chunk_size = self.n_ctrl  # expert sequence length == spline tokens
-        decoded_len = self.exec_horizon if self.exec_horizon is not None else self.horizon
+        # v2 decodes a DYNAMIC chunk length (predicted T, up to horizon_max);
+        # v1 decodes a fixed one. Validate the replan cadence against the max.
+        decoded_len = (
+            self.horizon_max
+            if self.predict_duration
+            else (self.exec_horizon if self.exec_horizon is not None else self.horizon)
+        )
         if self.n_action_steps > decoded_len:
             raise ValueError(
                 f"n_action_steps ({self.n_action_steps}) must be <= decoded chunk "
                 f"length ({decoded_len} env steps)."
             )
+        if self.replan_frac is not None:
+            if not self.predict_duration:
+                raise ValueError("replan_frac (self-paced replanning) requires predict_duration=true")
+            if not (0.0 < self.replan_frac <= 1.0):
+                raise ValueError(f"replan_frac must be in (0, 1], got {self.replan_frac}")
+        if self.speed_aug is not None:
+            if len(self.speed_aug) < 2:
+                raise ValueError("speed_aug needs >= 2 factors to create heterogeneity")
+            if min(self.speed_aug) < 1.0:
+                raise ValueError("speed_aug factors must be >= 1 (s<1 clips deltas at the actuator bound)")
+        if self.replan_margin is not None:
+            if not self.predict_duration:
+                raise ValueError("replan_margin (self-paced replanning) requires predict_duration=true")
+            if self.replan_frac is not None:
+                raise ValueError("set replan_frac or replan_margin, not both")
+            if self.replan_margin < 0:
+                raise ValueError(f"replan_margin must be >= 0, got {self.replan_margin}")
         if self.n_ctrl < self.spline_degree + 1:
             raise ValueError(f"cubic B-spline needs n_ctrl >= {self.spline_degree + 1}")
         if self.horizon + 1 < self.n_ctrl:
