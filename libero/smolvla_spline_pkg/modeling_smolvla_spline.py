@@ -116,16 +116,27 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             pm_bank = torch.zeros(n_len, n - 2, Hm + 1, dtype=torch.float64)
             bl_bank = torch.zeros(n_len, Hm + 1, 1, dtype=torch.float64)
             pg_bank = torch.zeros(n_len, n, Hm, dtype=torch.float64)
+            bp_bank = torch.zeros(n_len, Hm + 1, n, dtype=torch.float64)  # full basis (decode-consistency)
             for i, T in enumerate(range(lo, Hm + 1)):
                 u_path = torch.arange(T + 1, dtype=torch.float64) / T
                 B_path = bspline_basis(u_path, n, deg)
-                pm_bank[i, :, : T + 1] = torch.linalg.pinv(B_path[:, 1 : n - 1])
+                if cfg.fit_end_weight is not None:
+                    # contact-weighted LSQ: weight ramps 1 -> W over the last 25%
+                    # of the (event-terminated) chunk; rank-safe via sqrt-W pinv.
+                    W = float(cfg.fit_end_weight)
+                    sw = torch.sqrt(1.0 + (W - 1.0) * ((u_path - 0.75) / 0.25).clamp(0, 1))
+                    pm = torch.linalg.pinv(sw.unsqueeze(1) * B_path[:, 1 : n - 1]) * sw.unsqueeze(0)
+                else:
+                    pm = torch.linalg.pinv(B_path[:, 1 : n - 1])
+                pm_bank[i, :, : T + 1] = pm
                 bl_bank[i, : T + 1, :] = B_path[:, n - 1 : n]
+                bp_bank[i, : T + 1, :] = B_path
                 u_grip = torch.arange(T, dtype=torch.float64) / max(T - 1, 1)
                 pg_bank[i, :, :T] = torch.linalg.pinv(bspline_basis(u_grip, n, deg))
             self.register_buffer("_pm_bank", pm_bank.float(), persistent=False)
             self.register_buffer("_bl_bank", bl_bank.float(), persistent=False)
             self.register_buffer("_pg_bank", pg_bank.float(), persistent=False)
+            self.register_buffer("_bp_bank", bp_bank.float(), persistent=False)
             stats_name, expect_len = cfg.spline_stats_file_v2, None
 
         stats_path = os.path.join(os.path.dirname(__file__), stats_name)
@@ -257,6 +268,7 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             c_mid = torch.einsum("bmh,bhd->bmd", pm, resid)            # (B, n-2, 6)
             c_pose = torch.cat([torch.zeros_like(p_end), c_mid, p_end], dim=1)
             c_grip = torch.einsum("bnh,bh->bn", pg, grip)              # (B, n)
+            self._last_T_batch = T                                     # decode-consistency hook
             T_lab = T.to(pose.dtype)
             if cfg.speed_aug:
                 # Time allocation factorizes shape from timing: the slowed demo
@@ -279,19 +291,76 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
         target = self._build_spline_targets(batch)                     # (B, n, 8)
         actions = pad_vector(target, self.config.max_action_dim)       # (B, n, 32)
 
-        losses = self.model.forward(
-            images, img_masks, lang_tokens, lang_masks, state, actions, noise, time
-        )
+        dc_w = self.config.decode_consistency_weight
+        if dc_w > 0:
+            losses, flow_err, t_used = self._flow_forward_with_error(
+                images, img_masks, lang_tokens, lang_masks, state, actions, noise, time
+            )
+        else:
+            losses = self.model.forward(
+                images, img_masks, lang_tokens, lang_masks, state, actions, noise, time
+            )
         losses = losses[:, :, : self._N_OUT]  # all spline tokens are valid (no padding)
         loss_dict = {"losses_after_forward": losses.mean().item()}
+
+        dc_aux = None
+        if dc_w > 0:
+            # x0-space PATH error: x0_hat - x0 = t*(u_t - v_t); decode is linear,
+            # so project the signed flow error through the (std-scaled) basis.
+            e_pose = flow_err[:, :, :6] * self._tgt_std[:, :6]          # (B, n, 6) raw scale
+            bp = self._bp_bank[self._last_T_batch - self.config.min_seg]  # (B, Hm+1, n)
+            path_err = torch.einsum("bhn,bnd->bhd", bp, e_pose)         # zero rows beyond T+1
+            per = (t_used[:, None, None] ** 2 * path_err.pow(2)).sum(dim=(1, 2))
+            dc_aux = (per / ((self._last_T_batch + 1).to(per.dtype) * 6)).mean()
+            loss_dict["dc_aux"] = dc_aux.item()
 
         if reduction == "none":
             per_sample = losses.mean(dim=(1, 2))
             loss_dict["loss"] = per_sample.mean().item()
             return per_sample, loss_dict
         loss = losses.mean()
+        if dc_aux is not None:
+            loss = loss + dc_w * dc_aux
         loss_dict["loss"] = loss.item()
         return loss, loss_dict
+
+    def _flow_forward_with_error(self, images, img_masks, lang_tokens, lang_masks,
+                                 state, actions, noise=None, time=None):
+        """Replicates VLAFlowMatching.forward but also returns the SIGNED flow
+        error (v_t - u_t) and the sampled time — needed by the decode-consistency
+        auxiliary loss (the stock forward only returns squared errors)."""
+        import torch.nn.functional as F
+
+        from ..smolvla.modeling_smolvla import make_att_2d_masks
+
+        m = self.model
+        if noise is None:
+            noise = m.sample_noise(actions.shape, actions.device)
+        if time is None:
+            time = m.sample_time(actions.shape[0], actions.device)
+        time_expanded = time[:, None, None]
+        x_t = time_expanded * noise + (1 - time_expanded) * actions
+        u_t = noise - actions
+        prefix_embs, prefix_pad_masks, prefix_att_masks = m.embed_prefix(
+            images, img_masks, lang_tokens, lang_masks, state=state
+        )
+        suffix_embs, suffix_pad_masks, suffix_att_masks = m.embed_suffix(x_t, time)
+        pad_masks = torch.cat([prefix_pad_masks, suffix_pad_masks], dim=1)
+        att_masks = torch.cat([prefix_att_masks, suffix_att_masks], dim=1)
+        att_2d_masks = make_att_2d_masks(pad_masks, att_masks)
+        position_ids = torch.cumsum(pad_masks, dim=1) - 1
+        (_, suffix_out), _ = m.vlm_with_expert.forward(
+            attention_mask=att_2d_masks,
+            position_ids=position_ids,
+            past_key_values=None,
+            inputs_embeds=[prefix_embs, suffix_embs],
+            use_cache=False,
+            fill_kv_cache=False,
+        )
+        suffix_out = suffix_out[:, -self.config.chunk_size :].to(dtype=torch.float32)
+        v_t = m.action_out_proj(suffix_out)
+        losses = F.mse_loss(u_t, v_t, reduction="none")
+        return losses, v_t - u_t, time
 
     # ----------------------------------------------------------------- decode
     def _predicted_T_batch(self, tokens_unnorm: Tensor) -> Tensor:
@@ -328,10 +397,23 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
 
         dev = tokens.device
 
-        def _path_deltas(h):
+        ease = self.config.ease_out if getattr(self, "_ease_this_chunk", False) else None
+
+        def _u_grid(h):
             u = torch.arange(h + 1, device=dev, dtype=torch.float64) / h
+            if ease is None or h < 4:
+                return u
+            # re-time the last 3 path steps over 3+ease steps, cosine-spaced:
+            # same path, exact endpoint, velocity -> ~0 at the event boundary.
+            m = 3
+            k = torch.arange(m + ease + 1, device=dev, dtype=torch.float64) / (m + ease)
+            tail = (h - m) / h + (m / h) * torch.sin(k * torch.pi / 2)
+            return torch.cat([u[: h - m], tail])
+
+        def _path_deltas(h):
+            u = _u_grid(h)
             Bp = bspline_basis(u, self.config.n_ctrl, self.config.spline_degree).float().to(dev)
-            path = torch.einsum("hn,bnd->bhd", Bp, c_pose)             # (B, h+1, 6)
+            path = torch.einsum("hn,bnd->bhd", Bp, c_pose)             # (B, len(u), 6)
             return path[:, 1:] - path[:, :-1]
 
         deltas = _path_deltas(h_exec)
@@ -347,7 +429,11 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
                 deltas = _path_deltas(h_exec)
         deltas = deltas.clamp(-1.0, 1.0)
 
-        u_grip = (torch.arange(h_exec, device=dev, dtype=torch.float64) / max(h_exec - 1, 1))
+        if ease is not None and h_exec >= 4:
+            ug_full = _u_grid(h_exec)
+            u_grip = (ug_full[:-1] + ug_full[1:]) / 2   # interval midpoints, len = n_deltas
+        else:
+            u_grip = (torch.arange(h_exec, device=dev, dtype=torch.float64) / max(h_exec - 1, 1))
         Bg = bspline_basis(u_grip, self.config.n_ctrl, self.config.spline_degree).float()
         g = torch.einsum("hn,bn->bh", Bg.to(dev), c_grip)
         grip = torch.where(g >= 0, 1.0, -1.0).unsqueeze(-1)
@@ -392,8 +478,13 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             if self.config.speedup_alpha < 1.0 and T > self.config.speedup_T_threshold:
                 alpha = self.config.speedup_alpha  # duration-aware selective speedup
             h_exec = max(2, round(T * self.config.exec_rate_ratio * alpha))
+            # soft landing only into predicted EVENTS (contact), not cap chunks
+            self._ease_this_chunk = (
+                self.config.ease_out is not None and T < self.config.horizon_max
+            )
         else:
             h_exec = self.config.exec_horizon or self.config.horizon
+            self._ease_this_chunk = False
         chunk = self._decode_tokens(tokens, h_exec)
         if self.config.predict_duration and self.config.replan_frac is not None:
             # Self-paced replanning: execute replan_frac of the chunk's own
@@ -449,6 +540,9 @@ def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.s
         replan_frac = None
         replan_margin = None
         speed_aug = None
+        fit_end_weight = None
+        ease_out = None
+        decode_consistency_weight = 0.0
 
     class _Cfg(_StubBase):  # minimal duck-typed config for operator init
         n_ctrl, horizon, spline_degree, spline_stats_file = n, H, deg, "spline_stats_libero.json"
@@ -563,6 +657,34 @@ def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.s
     print(f"speed-aug v2: shape ctrl-pt diff across s = {shape_diff:.2e} (expect 0); "
           f"durations {T0:.1f}/{T1:.1f} (expect 12/24)")
     assert shape_diff < 1e-6 and abs(T0 - 12) < 0.1 and abs(T1 - 24) < 0.1
+
+    # ---------------- contact-weighted fit: WLS exactness vs numpy ----------------
+    class _CfgV2W(_CfgV2):
+        fit_end_weight = 9.0
+
+    h4 = _HolderV2()
+    h4.config = _CfgV2W
+    SmolVLASplinePolicy._init_spline_operators(h4, _CfgV2W)
+    h4._first_event = SmolVLASplinePolicy._first_event.__get__(h4)
+    tgt5 = SmolVLASplinePolicy._build_spline_targets(h4, {ACTION: a2})
+    un5 = tgt5 * h4._tgt_std + h4._tgt_mean
+    # numpy WLS reference on sample 0 (T=12): pinned both ends, weight ramp
+    T0w = 12
+    seg = a2[0, :T0w, :6].numpy()
+    pathw = np.concatenate([np.zeros((1, 6)), np.cumsum(seg, axis=0)], axis=0)
+    uw = np.arange(T0w + 1) / T0w
+    from scipy.interpolate import BSpline as _BS
+    knw = np.concatenate([np.zeros(deg), np.linspace(0, 1, n - deg + 1), np.ones(deg)])
+    Bw = np.stack([_BS(knw, np.eye(n)[j], deg, extrapolate=False)(uw) for j in range(n)], axis=1)
+    Bw = np.nan_to_num(Bw)
+    sww = np.sqrt(1 + 8.0 * np.clip((uw - 0.75) / 0.25, 0, 1))
+    p_endw = pathw[-1:, :]
+    residw = pathw - Bw[:, n - 1 : n] @ p_endw
+    c_midw = (np.linalg.pinv(sww[:, None] * Bw[:, 1 : n - 1]) * sww[None, :]) @ residw
+    err_w = np.abs(un5[0, 1 : n - 1, :6].numpy() - c_midw).max()
+    print(f"contact-weighted fit: torch vs numpy WLS ctrl-pt err {err_w:.2e}; "
+          f"endpoint still exact: {float((un5[0, -1, :6] - torch.tensor(p_endw[0], dtype=torch.float32)).abs().max()):.2e}")
+    assert err_w < 1e-4
 
     # ------------- velocity-chaining math: s'(0) coefficient + continuity -------------
     u_pair = torch.tensor([0.0, 1e-6], dtype=torch.float64)

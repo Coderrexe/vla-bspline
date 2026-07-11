@@ -30,6 +30,13 @@ def main():
     ap.add_argument("--max_steps", type=int, default=280)
     ap.add_argument("--control_freq", type=int, default=20)
     ap.add_argument("--out", default="rollouts.npz")
+    # T-hat-stagnation recovery: when the duration head's countdown stalls
+    # (trailing-window stall_frac > threshold), back off (retreat upward a few
+    # steps), clear the plan, and re-approach. Benign on false alarms.
+    ap.add_argument("--recover", action="store_true")
+    ap.add_argument("--recover_thr", type=float, default=0.45)
+    ap.add_argument("--recover_window", type=int, default=80)
+    ap.add_argument("--recover_cooldown", type=int, default=60)
     args = ap.parse_args()
 
     policy_cfg = PreTrainedConfig.from_pretrained(args.ckpt)
@@ -56,7 +63,26 @@ def main():
         policy.reset()
         acts, states, that = [], [], []
         done, step, ep_success = False, 0, False
+        n_recoveries, last_recover, cap = 0, -10_000, 24
         while not done and step < args.max_steps:
+            if (args.recover and step - last_recover > args.recover_cooldown
+                    and len(that) >= 68):
+                th = np.array([t for t in that[-args.recover_window:] if t > 0], dtype=float)
+                if len(th) >= 28:
+                    trend = th[8:] - th[:-8]
+                    near = th[8:] < cap
+                    if near.sum() >= 20 and ((trend >= 0) & near).sum() / near.sum() > args.recover_thr:
+                        # back off: open-loop upward retreat, then replan fresh
+                        g_hold = acts[-1][6] if acts else -1.0  # keep gripper state (never drop a held object)
+                        for _ in range(4):
+                            ra = np.zeros(7, dtype=np.float32); ra[2] = 0.4; ra[6] = g_hold
+                            obs, *_ = env.step(ra[None, :])
+                            acts.append(ra); states.append(states[-1]); that.append(-1)
+                            step += 1
+                        policy.reset()
+                        n_recoveries += 1
+                        last_recover = step
+                        continue
             observation = preprocess_observation(obs)
             try:
                 observation["task"] = list(env.call("task_description"))
@@ -88,7 +114,8 @@ def main():
         successes.append(ep_success)
         calls = int(getattr(policy, "n_chunks_generated", -1))  # -1 = counter unsupported
         n_calls.append(calls)
-        print(f"ep {ep}: steps={step} success={ep_success} policy_calls={calls}", flush=True)
+        rec = f" recoveries={n_recoveries}" if args.recover else ""
+        print(f"ep {ep}: steps={step} success={ep_success} policy_calls={calls}{rec}", flush=True)
 
     np.savez(
         args.out,

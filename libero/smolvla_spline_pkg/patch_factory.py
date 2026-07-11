@@ -91,6 +91,22 @@ INIT_ADD3 = (
 )
 
 
+CLASS_ADD4 = '''    elif name == "smolvla_tempo":
+        from .smolvla_spline.smolvla_tempo import SmolVLATempoPolicy
+
+        return SmolVLATempoPolicy
+'''
+CFG_ADD4 = '''    elif policy_type == "smolvla_tempo":
+        from .smolvla_spline.smolvla_tempo import SmolVLATempoConfig
+
+        return SmolVLATempoConfig(**kwargs)
+'''
+INIT_ADD4 = (
+    "from .smolvla_spline.smolvla_tempo import "
+    "SmolVLATempoConfig as SmolVLATempoConfig\n"
+)
+
+
 def main(path):
     init_path = os.path.join(os.path.dirname(path), "__init__.py")
     _patch(path, [(CLASS_ANCHOR, CLASS_ADD), (CFG_ANCHOR, CFG_ADD)], "factory.py")
@@ -99,6 +115,8 @@ def main(path):
     _patch2(init_path, [(INIT_ANCHOR, INIT_ADD2)], "policies/__init__.py", "smolvla_interp")
     _patch2(path, [(CLASS_ANCHOR, CLASS_ADD3), (CFG_ANCHOR, CFG_ADD3)], "factory.py", "smolvla_speedaug")
     _patch2(init_path, [(INIT_ANCHOR, INIT_ADD3)], "policies/__init__.py", "smolvla_speedaug")
+    _patch2(path, [(CLASS_ANCHOR, CLASS_ADD4), (CFG_ANCHOR, CFG_ADD4)], "factory.py", "smolvla_tempo")
+    _patch2(init_path, [(INIT_ANCHOR, INIT_ADD4)], "policies/__init__.py", "smolvla_tempo")
 
 
 if __name__ == "__main__":

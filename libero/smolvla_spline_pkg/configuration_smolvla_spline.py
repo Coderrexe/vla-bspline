@@ -57,6 +57,33 @@ class SmolVLASplineConfig(SmolVLAConfig):
     # back to horizon_max so transport chunks run at intended speed.
     duration_snap_threshold: int | None = None
 
+    # Ease-out decode (v2, decode-only): demonstrators decelerate to ~0.55x
+    # cruise speed around gripper toggles; the LSQ fit smooths that terminal
+    # deceleration away (endpoint POSITION is pinned, terminal VELOCITY is not),
+    # so the policy contacts at ~0.88x cruise (measured, libero_spatial). For
+    # event-terminated chunks (T_hat < horizon_max = contact imminent), re-time
+    # the final 3 path steps over (3 + ease_out) steps with cosine spacing:
+    # same path, exact endpoint, velocity tapering to ~0 at the event.
+    ease_out: int | None = None
+
+    # Decode-consistency auxiliary loss (v2 only): the flow loss lives in
+    # control-point space (6 tokens x 8 channels) where fine terminal detail is
+    # a tiny loss fraction; waypoint policies supervise 50 per-step targets at
+    # equalized scale. This auxiliary term projects the SIGNED flow error
+    # through the decode basis — mathematically the x0-space PATH error
+    # (x0_hat - x0 = t*(u_t - v_t), decode is linear) — unifying the two
+    # supervision geometries while keeping every spline capability.
+    # 0 = off. Suggested 5.0 (aux ~ comparable magnitude to flow loss early).
+    decode_consistency_weight: float = 0.0
+
+    # Contact-weighted fit (v2 only): event-terminated chunks place contact at
+    # u=1, so end-weighting the LSQ fit re-allocates representation error away
+    # from the precise terminal motions (offline mechanism study: tail rel-err
+    # -23% at n6 / -31% at n8 for weight 9, body cost ~+4%; knot densification
+    # BACKFIRES at this control-point budget). Weight ramps 1 -> fit_end_weight
+    # over the last 25% of the chunk. Decode is completely unchanged.
+    fit_end_weight: float | None = None
+
     # --- speed-heterogeneous demonstrations (training-time experiment) ---
     # Per-episode synthetic speed factor s = speed_aug[episode_index % len]:
     # the same spatial path executed s x slower (s >= 1 only: speeding up the
@@ -127,6 +154,18 @@ class SmolVLASplineConfig(SmolVLAConfig):
                 raise ValueError("replan_frac (self-paced replanning) requires predict_duration=true")
             if not (0.0 < self.replan_frac <= 1.0):
                 raise ValueError(f"replan_frac must be in (0, 1], got {self.replan_frac}")
+        if self.ease_out is not None:
+            if not self.predict_duration:
+                raise ValueError("ease_out requires predict_duration=true (event-terminated chunks)")
+            if self.ease_out < 1:
+                raise ValueError(f"ease_out must be >= 1 extra step, got {self.ease_out}")
+        if self.decode_consistency_weight > 0 and not self.predict_duration:
+            raise NotImplementedError("decode_consistency_weight currently implemented for the v2 (event-segmented) head only")
+        if self.fit_end_weight is not None:
+            if not self.predict_duration:
+                raise ValueError("fit_end_weight requires predict_duration=true (contact = chunk end only for event-terminated chunks)")
+            if self.fit_end_weight <= 1.0:
+                raise ValueError(f"fit_end_weight must be > 1, got {self.fit_end_weight}")
         if self.speed_aug is not None:
             if len(self.speed_aug) < 2:
                 raise ValueError("speed_aug needs >= 2 factors to create heterogeneity")

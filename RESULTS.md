@@ -15,13 +15,23 @@ SmolVLA's flow-matching expert generates **6 B-spline control-point tokens** (+ 
 | B spline fixed-T | **91%** |
 | C spline + time-allocation | 85% |
 
-**100k full budget, all four suites, 3 SEEDS PER ARM (complete July 7):**
+**100k full budget, all four suites, 3 SEEDS PER ARM (n6 July 7; n8 complete July 8):**
 | policy | obj | spa | goal | long | avg over suites |
 |---|---|---|---|---|---|
 | A waypoint (3 seeds) | 93/93/98 | 83/86/84 | 84/88/86 | 60/65/65 | **82.1 ± 1.8** |
-| B spline fixed-T (3 seeds) | 95/89/91 | 80/80/70 | 86/85/78 | 70/59/62 | **78.8 ± 3.8** |
-| **C spline + time-alloc (h24, 3 seeds)** | 90/95/94 | 72/76/75 | 84/82/87 | 64/66/57 | **78.5 ± 1.1** |
+| B spline fixed-T n6 (3 seeds) | 95/89/91 | 80/80/70 | 86/85/78 | 70/59/62 | **78.8 ± 3.8** |
+| C spline + time-alloc n6 (3 seeds) | 90/95/94 | 72/76/75 | 84/82/87 | 64/66/57 | **78.5 ± 1.1** |
+| **B spline n8 (3 seeds)** | 98/97/94 | 87/71/75 | 84/82/86 | 66/67/63 | **80.8 ± 2.5** |
+| **C time-alloc n8 (3 seeds)** | 94/91/92 | 76/79/77 | **95/89/84** | 63/63/65 | **80.7 ± 1.3** |
 | *published SmolVLA ref (1 seed)* | *96* | *90* | *92* | *71* | *87.3* |
+
+**Headline (fully seeded):** with the capacity knob set (n8), both spline arms sit
+within 1.3 pts of the waypoint baseline (80.8/80.7 vs 82.1, overlapping CIs) —
+**parity, seeded, on the promoted config**. C-n8's goal seed-mean (89.3) is the best
+of any arm incl. A (86.0). C remains the most stable arm at both capacities (±1.1/±1.3).
+**The one surviving deficit is spatial (~77 vs A's 84.3), robust across capacities,
+seeds, and both spline arms** — the precision/contact problem, now targeted by the
+contact-weighted fit (§4b).
 
 **Honest 3-seed reads:**
 1. **B ≡ C (78.8 vs 78.5): time allocation costs nothing** relative to fixed-time —
