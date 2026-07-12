@@ -107,6 +107,49 @@ def fig_hz():
     print("saved outputs/fig_hz.png")
 
 
+def fig_headtohead():
+    # success vs REALIZED speedup (steps_base/steps), object suite, same rollout
+    # protocol. Speed-as-input (TempoVLA-lite, retrained w/ VSTA + conditioning)
+    # vs speed-as-output (ours, decode-only alpha).
+    # ALL 100k, same rollout protocol, object, n=100/point (July 12 final):
+    # tempo: v1.0 98 @ 135.0; v1.5 80 @ 98.9; v2.0 43 @ 94.6 (realized saturates)
+    # dsel (data-level selective retiming, fixed): 85 @ 114.3
+    # ours (C-n8): base 90 @ 143.4; sel06 90 @ 114.6; uni06 88 @ 102.9; sel05 84 @ 112.5
+    t_steps0, o_steps0 = 135.0, 143.4
+    tempo = [(1.0, 98), (t_steps0 / 98.9, 80), (t_steps0 / 94.6, 43)]
+    ours_sel = [(1.0, 90), (o_steps0 / 114.6, 90), (o_steps0 / 112.5, 84)]
+    ours_uni = [(1.0, 90), (o_steps0 / 102.9, 88), (o_steps0 / 105.0, 73)]
+    dsel = (t_steps0 / 114.3, 85)
+
+    fig, ax = plt.subplots(figsize=(7.4, 5.0))
+    ax.scatter(*dsel, s=110, marker="^", color=GREEN, edgecolor="white", lw=1.2,
+               zorder=3, label="data-level selective retiming (retrained, fixed speed)")
+    for pts, c, lab, m in [
+        (ours_sel, BLUE, "ours: decode-α selective (no retraining)", "o"),
+        (ours_uni, SKY, "ours: decode-α uniform (no retraining)", "D"),
+        (tempo, VERM, "speed-as-input (VSTA + conditioning, retrained)", "s"),
+    ]:
+        xs, ys = zip(*pts)
+        ax.plot(xs, ys, "-" + m, color=c, lw=2.2, ms=9, label=lab,
+                markeredgecolor="white", markeredgewidth=1.2, zorder=3)
+    ax.annotate("commanded 2×\nrealizes only 1.43×", tempo[-1], textcoords="offset points",
+                xytext=(-4, 14), fontsize=9.5, color=VERM, ha="right")
+    ax.annotate("88–90% at realized 1.3–1.4×", (1.33, 91), textcoords="offset points",
+                xytext=(0, 8), fontsize=10, color=BLUE, ha="center", fontweight="bold")
+    ax.annotate("multi-speed training\nhelps at 1× (composable)", (1.0, 98),
+                textcoords="offset points", xytext=(10, -2), fontsize=8.5, color=VERM)
+    ax.set_xlabel("realized speedup  (mean steps at 1× / mean steps)")
+    ax.set_ylabel("success rate  (%)")
+    ax.set_title("Where should speed control live? — all arms 100k, same base model\n"
+                 "LIBERO-Object, 100 episodes/point, matched rollout protocol",
+                 fontsize=12, loc="left")
+    ax.set_ylim(30, 103)
+    ax.legend(loc="lower left", frameon=False, fontsize=9.5)
+    fig.tight_layout(); fig.savefig("outputs/fig_headtohead.png"); plt.close(fig)
+    print("saved outputs/fig_headtohead.png")
+
+
 if __name__ == "__main__":
     fig_pareto()
     fig_hz()
+    fig_headtohead()

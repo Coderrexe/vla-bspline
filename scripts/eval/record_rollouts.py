@@ -29,6 +29,7 @@ def main():
     ap.add_argument("--episodes", type=int, default=5)
     ap.add_argument("--max_steps", type=int, default=280)
     ap.add_argument("--control_freq", type=int, default=20)
+    ap.add_argument("--seed_base", type=int, default=1000)
     ap.add_argument("--out", default="rollouts.npz")
     # T-hat-stagnation recovery: when the duration head's countdown stalls
     # (trailing-window stall_frac > threshold), back off (retreat upward a few
@@ -59,7 +60,7 @@ def main():
 
     all_actions, all_states, all_that, ep_lens, successes, n_calls = [], [], [], [], [], []
     for ep in range(args.episodes):
-        obs, _ = env.reset(seed=1000 + ep)
+        obs, _ = env.reset(seed=args.seed_base + ep)
         policy.reset()
         acts, states, that = [], [], []
         done, step, ep_success = False, 0, False
@@ -71,7 +72,7 @@ def main():
                 if len(th) >= 28:
                     trend = th[8:] - th[:-8]
                     near = th[8:] < cap
-                    if near.sum() >= 20 and ((trend >= 0) & near).sum() / near.sum() > args.recover_thr:
+                    if near.sum() >= 12 and ((trend >= 0) & near).sum() / near.sum() > args.recover_thr:
                         # back off: open-loop upward retreat, then replan fresh
                         g_hold = acts[-1][6] if acts else -1.0  # keep gripper state (never drop a held object)
                         for _ in range(4):

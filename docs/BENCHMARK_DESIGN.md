@@ -46,12 +46,21 @@ protocol is **within-stack controlled comparison** + **normalized cross-work cur
    Axes: success @ each speed × retraining cost × per-chunk adjustability
    (input-conditioned policies get ONE speed per episode unless re-prompted;
    ours retimes per chunk).
-   **First 20k numbers (July 9, object, n=100): TempoVLA-lite v=0.5/1/1.5/2 →
-   90/93/78/40.** Conditioning is free at 1× (93 = A-20k twin) but success falls
-   steeply with commanded speed (−15 @1.5×, −53 @2×) — the tracking-mismatch
-   failure TempoVLA itself reports. Our decode-retimed C loses −2…−6 at comparable
-   commanded speedups with zero retraining (100k α-curves; budget-matched rerun +
-   realized-speed measurement queued before any cross-claim is promoted).
+   **FINAL, budget-matched (July 12; all arms 100k, same rollout protocol, object,
+   n=100/point) → `fig_headtohead.png`:**
+
+   | arm | 1× | fast points (realized speedup) | retrain | knob |
+   |---|---|---|---|---|
+   | speed-as-input (VSTA+cond) | **98** | 80 @ 1.37× → **43 @ 1.43×** (saturates) | 19h GPU | per-episode |
+   | data-level selective retiming | — | 85 @ 1.18× | 16h GPU | none (baked) |
+   | **decode-level (ours, C-n8)** | 90–93 | **90 @ 1.26×, 88 @ 1.40×** | **0** | per-chunk, endogenous |
+
+   Honest both ways: multi-speed *augmentation* is a real training regularizer
+   (98 at 1× — best object number in the study; replicates TempoVLA's claim, and
+   **composes with our head** — future work), but as a *speed mechanism* it
+   saturates at realized 1.43× and collapses to 43% exactly where decode
+   retiming holds 88%. Data-level selectivity sits between: safe but fixed and
+   costs a full retrain per operating point.
 3. **Cost axes no prior work reports:** policy calls/episode, per-call latency
    (6 vs 50 denoised tokens), env steps to completion, all at matched success.
 4. **Contact protection curve:** success vs speedup separately on transport-dominated

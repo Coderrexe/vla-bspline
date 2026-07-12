@@ -61,8 +61,8 @@ def fig_timeline():
 
     fig, ax = plt.subplots(figsize=(8.2, 4.6))
     ax.plot(steps, that, color=BLUE, lw=2, label="predicted duration T̂", zorder=3)
-    ax.axhline(40, color="#999", ls=":", lw=1.1)
-    ax.text(len(that) * 0.99, 40.7, "cap (transport)", color="#777", fontsize=9, ha="right")
+    ax.axhline(24, color="#999", ls=":", lw=1.1)
+    ax.text(len(that) * 0.99, 24.7, "cap (transport)", color="#777", fontsize=9, ha="right")
 
     # gripper close/open events
     closes = np.where((grip[1:] > 0) & (grip[:-1] <= 0))[0] + 1

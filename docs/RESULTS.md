@@ -1,9 +1,34 @@
 # B-Spline + Time-Allocation Action Head for SmolVLA — Results Digest
 
-*LIBERO benchmark, LeRobot pipeline. All evals: 100 episodes (10 tasks × 10), replan every 10 env steps (nas=10) unless noted. Updated July 5, 2026.*
+*LIBERO benchmark, LeRobot pipeline. All evals: 100 episodes (10 tasks × 10), replan every 10 env steps (nas=10) unless noted. Updated July 12, 2026.*
 
 ## Method in one line
-SmolVLA's flow-matching expert generates **6 B-spline control-point tokens** (+ gripper channel + duration channel) instead of 50 waypoints; a decode samples the continuous trajectory at **any** execution rate. v1 = fixed chunk time (2s). v2 = **time allocation**: chunks end at motion events (gripper toggles/pauses), duration is a learned output.
+SmolVLA's flow-matching expert generates **6–8 B-spline control-point tokens** (+ gripper channel + duration channel) instead of 50 waypoints; a decode samples the continuous trajectory at **any** execution rate. v1 = fixed chunk time (2s). v2 = **time allocation**: chunks end at motion events (gripper toggles/pauses), duration is a learned output. Promoted config: **n_ctrl=8, horizon_max=24 ("C-n8")**. Framing note: `TIME_AUTHORITY.md` — the executor keeps authority over the time map after training; the duration channel is the interface for exercising it safely.
+
+## 0. State of the project (executive summary, July 12)
+1. **Native-rate parity, fully seeded** (§1): A 82.1±1.8 / B-n8 80.8±2.5 / C-n8 80.7±1.3;
+   no suite-level ordering survives protocol-crossed evaluation in either direction
+   (§4c) — differentiation lives entirely in the capability set.
+2. **The capability set, each claim red-teamed** (all on the promoted config):
+   feasibility stretch **+19 at half rate** (§2); decode-time speed knob —
+   protocol-crossed at n=300: 20–28% time reduction for ~4–5 pts at α=0.6,
+   selectivity paying at the capacity-dependent frontier (+21 at α=0.4) (§3);
+   duration-scheduled replanning at **2.7× fewer policy calls** (§3c);
+   **endogenous failure detection** — 86% precision, live-validated; kinematic
+   self-recovery scoped as a negative (§3e); soft contact landing via ease-out
+   decode (terminal velocity ×0.14, exact endpoint) (§4b); shape/timing
+   factorization absorbs demonstration-speed heterogeneity (§3d); calibration
+   MAE 2.8 on the promoted config.
+3. **Benchmark head-to-head, budget-matched at 100k** (BENCHMARK_DESIGN.md): the
+   speed-control triad — speed-as-input saturates at realized 1.43× and collapses
+   to 43% where our decode retiming holds 88%; data-level selectivity is safe but
+   fixed; ours is the only zero-retraining, per-chunk-adjustable mechanism.
+   Multi-speed augmentation is a genuine 1×-regularizer for waypoint heads (98%);
+   duration-only augmentation is not (composition pilot null, July 12).
+4. **Methodological finding** (§4c): LIBERO suite comparisons at n=100 carry
+   ±5–9 pt protocol/seed-set variance — training-seed error bars are insufficient.
+5. Figures banked on the promoted config: countdown timeline, calibration,
+   dose-response Pareto, realized-speed head-to-head.
 
 ## 1. Native-rate success (the "does it cost anything?" table)
 
@@ -27,11 +52,30 @@ SmolVLA's flow-matching expert generates **6 B-spline control-point tokens** (+ 
 
 **Headline (fully seeded):** with the capacity knob set (n8), both spline arms sit
 within 1.3 pts of the waypoint baseline (80.8/80.7 vs 82.1, overlapping CIs) —
-**parity, seeded, on the promoted config**. C-n8's goal seed-mean (89.3) is the best
-of any arm incl. A (86.0). C remains the most stable arm at both capacities (±1.1/±1.3).
-**The one surviving deficit is spatial (~77 vs A's 84.3), robust across capacities,
-seeds, and both spline arms** — the precision/contact problem, now targeted by the
-contact-weighted fit (§4b).
+**parity, seeded, on the promoted config**. C remains the most stable arm at both
+capacities (±1.1/±1.3). *(C-n8's goal seed-mean 89.3 vs A's 86.0 does NOT survive
+protocol crossing — rollout harness gives A 90–93 vs C-n8 84–87 across two seed
+bases, the mirror of the spatial flip. We red-teamed our own favorable number with
+the §4c methodology and it dissolved like the unfavorable one: at these sample
+sizes, NO suite-level ordering claims are defensible in either direction. The
+table's claim is parity; the differentiation is the capability set.)*
+
+**⚠️→✅ The "spatial gap" DISSOLVED under protocol replication (July 9).** The
+apparent ~7-pt spatial deficit (lerobot-eval, 3 training seeds) does not survive
+crossing the *evaluation* protocol: under the rollout harness the same checkpoints
+give A 81 / C-n8 81 (seed base 1000) and **A 74 / C-n8 79 (seed base 2000 — sign
+flipped)**. Per-protocol spatial eval noise (±5–7 per 100 episodes) exceeds the
+claimed gap; training-seed replication had been replicating a fixed protocol, not a
+truth. Full elimination ledger that got here: capacity ✗ (n8, seed-fragile),
+contact-weighted fit ✗ (W9, clean negative), generative variance ✗ (equal dispersion),
+protocol ✓ (the actual cause). **Resolution of the contact-rich direction: no robust
+success deficit remains at n8; the one real kinematic difference (under-deceleration
+at gripper toggles, 0.88× vs demos' 0.55×) is fixable decode-side (ease-out: terminal
+velocity ×0.14, exact endpoint) and matters for self-paced execution (66→71 spatial,
+toggle ratio →0.766 ≈ A's 0.750) and plausibly for real hardware where the controller
+is less forgiving than sim OSC. Methodological takeaway for the field: LIBERO
+suite-level comparisons at ~100 episodes need protocol-crossed evaluation (seed sets ×
+harnesses), not just training-seed error bars.**
 
 **Honest 3-seed reads:**
 1. **B ≡ C (78.8 vs 78.5): time allocation costs nothing** relative to fixed-time —
@@ -76,8 +120,10 @@ path-resampling of the waypoint chunk** (`smolvla_interp`, same trained weights)
 | **A interp + our stretch (20k)** | **85%** | — | — |
 | B spline (100k) | 56% | **95%** | 50% |
 | B spline (100k) + stretch | 72% | — | — |
-| C time-alloc (100k) | 50% | 91% (nas5) | 52% |
-| C time-alloc (100k) + stretch | 66% | — | — |
+| C time-alloc n6 (100k) | 50% | 91% (nas5) | 52% |
+| C time-alloc n6 (100k) + stretch | 66% | — | — |
+| **C time-alloc n8 (promoted, July 9)** | 56% | 92–94% | **62%** |
+| **C n8 + stretch** | **75% (+19)** | — | — |
 
 Takeaways (reshaped, more defensible):
 1. **Naive deployment fails catastrophically (0%)** — rate-adaptation must be an explicit mechanism.
@@ -111,8 +157,12 @@ B fixed-T at alpha=0.6 (uniform is its ONLY option): 77% @ 116.5 ≈ C-uniform (
 the gap comes from *selectivity*, not the representation. 95% binomial CI ≈ ±5–9 pts.
 
 **Headline reads (n=100, single checkpoint, only the *where* of the speedup differs):**
-1. **Free lunch confirmed: selective alpha=0.6 = 95% @ 122.7 vs no-speedup 93% @ 145.3 —
-   equal-or-better success, 16% faster.** Blind speedup at the same alpha loses 20 pts.
+1. ~~Free lunch~~ **FINAL (protocol-crossed, n=300 × 3 seed bases, C-n8, July 12):
+   base 94.0 @ 143.8; selective α.6 90.3 @ 114.7 (realized 1.25×); uniform α.6
+   88.7 @ 103.9 (1.38×). The single-cell "equal success" reading does not survive
+   pooling: the honest claim is a favorable TRADE — 20–28% execution-time
+   reduction for ~4–5 pts of success — adjustable post-hoc, with selectivity's
+   protection growing at aggressive α (+21 at α=0.4, §frontier).**
 2. Aggressive blind speedup collapses monotonically (90→85→73→57); selective stays
    ≥76% everywhere. The duration head is what tells the policy which motions are safe
    to rush — inexpressible for fixed-time or waypoint heads.
@@ -213,6 +263,36 @@ margin, duration-scheduled replanning matches the default cadence's success at
 **2.7× fewer policy calls** (and ties tuned nas=12 within noise). The negative result
 became an understood, reusable rule for any event-terminated action-chunk policy.
 
+## 3e. The duration head as a runtime failure monitor (July 9, NEW capability)
+
+T-hat predicts time-to-next-event; in successful approaches it counts down (the
+timeline figure). Measured on 260–400 episodes of existing rollouts (no new
+training, no new model machinery):
+
+- **Failures stall ~2×**: fraction of steps with non-decreasing 8-step T-hat trend
+  (while T-hat < cap) = 0.416 ± 0.109 in failures vs 0.203 ± 0.096 in successes
+  (replicated on both n6 and n8 configs).
+- **Post-hoc identification: 86% precision at 52% recall** (thr 0.4); 100%
+  precision at 0.5.
+- **Matched-horizon early warning (rigor check — first 150 steps only, episodes
+  alive at 150): 42% of eventual failures flaggable at 11% false alarms** — the
+  full separation partly accumulates late (fumble loops intensify), so early
+  detection is moderate, not magic. Honest scoping.
+- **Behavioral intervention (A/B, n=200/arm): detection transfers live (fired in
+  46/47 failures) and the back-off is benign (fired in ~50% of successes at only
+  −2…−4 pts / +10 steps) — but it does NOT convert failures** (object 91 vs 95,
+  long 62 vs 65). Flagged episodes retreat, re-approach, and fumble again: LIBERO
+  failures are persistent-incompetence, not perturbation traps, and since each
+  back-off resamples the chunk, noise-resampling recovery is covered by this
+  negative. **Scoped claim: the duration head gives free, live failure DETECTION
+  (act on it via early abort at the 100%-precision threshold, or operator/planner
+  escalation); kinematic self-recovery is not the payoff.** (Reporting bug that
+  masked firing in earlier runs: per-episode logs piped through `tail -1`.)
+
+No existing VLA carries an endogenous execution-progress signal; entropy/OOD
+monitors require ensembles or external models. This one is free wherever a
+duration head exists.
+
 ## 3b. Why time allocation (supporting evidence)
 - Event-segmented chunk durations vary strongly (CoV 0.38 over 53k anchors); 47% of chunks end at a gripper event with T = 22±10 steps → duration is a *predictable, semantically meaningful* output.
 - The time-allocation variant **trains better** than fixed-T at every budget (event-aligned chunks are more homogeneous).
@@ -293,15 +373,42 @@ hypothesis-driven investigation closed it:
   budget; duration prediction should not be entangled with fit support.*
 - **C-final (100k, h24) training overnight** → full-row battery + Pareto rerun.
 
+## 4c. Measurement-noise anatomy of LIBERO evaluation (July 9)
+
+Same-checkpoint success across evaluation conditions (100 episodes each unless noted):
+
+| checkpoint × suite | lerobot-eval | rollout sb1000 | rollout sb2000 | spread |
+|---|---|---|---|---|
+| A (s1000) × spatial | 83 | 81 | **74** | **9** |
+| C-n8 (s1000) × spatial | 76 | 81 | 79 | 5 |
+| C-n8 (s1000) × object | 94 | 93 | 95* | 2 |
+| C-n8 (s1000) × long | 63 | 65* | — | 2 |
+
+*duplicate-run cells from other batteries; also two literal duplicate lerobot-eval
+runs of Bn8-s1001 spatial gave 71 vs 76 (±5 on identical everything).
+
+**Findings:** (1) same-weights spatial measurements spread up to 9 pts — 2–4× the
+binomial SE at n=100 — i.e., the evaluation protocol (initial-state seed set,
+harness) contributes *systematic* variance beyond sampling noise, concentrated in
+the precision-placement suite; (2) object/long are comparatively tight; (3) any
+suite-level claim under ~8–10 pts at n=100 on spatial is unsupportable without
+protocol-crossed evaluation. This is how the "spline spatial gap" survived 3
+training seeds (§1) — training-seed error bars replicate the protocol's bias, not
+the truth. Recommendation adopted for all remaining comparisons: cross seed-sets ×
+harness, or use within-protocol paired contrasts only.
+
 ## 5. Reproducibility
 - Code: `lerobot/policies/smolvla_spline/` (+ factory & env `control_freq` patches), deployed on Misha & Bouchet.
 - Train: `--policy.type=smolvla_spline [--policy.predict_duration=true]` on `HuggingFaceVLA/libero`; 100k steps ≈ 4–7h on 1 GPU.
 - Eval variants (Hz/stretch/nas) are config-edited checkpoint dirs under `~/scratch/vla_bspline/outputs/hz_variants/` (Misha).
 - Offline validation: `libero/validate_spline_head_math.py`, `libero/v2_event_segmentation_study.py`, `libero/horizon_study.py`.
 
-## 5. Open items
-1. C decode fix (two candidate mechanisms; discriminating eval running) → retrain pilot ~80 min.
-2. A_full in-house waypoint 100k (training, ~4h) → completes the main table.
-3. Full-table Hz sweep on 100k ckpts + C's Hz row (running).
-4. Multi-seed / 500-episode confirmation for the paper's final numbers.
-5. Jerk/smoothness metrics; chunk-boundary continuity analysis (c₀-pinning story).
+## 6. Open items (July 12)
+1. Real-robot validation of the deployment capabilities (stretch, ease-out,
+   selective retiming, failure flagging) — the sim OSC absorbs command-level
+   kinematics; hardware is where continuity/deceleration claims bite (Xiatao).
+2. n8 spatial protocol-crossed at higher n if any suite claim is ever needed.
+3. Future-work pocket: shape-level temporal augmentation for spline heads
+   (composition pilot showed duration-only aug ≠ regularizer); decode-consistency
+   aux loss (coded, gated — no motivating evidence after protocol resolution);
+   F1″ decoupled shape-support/duration; CALVIN unification with Quinten.

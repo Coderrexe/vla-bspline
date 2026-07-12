@@ -117,6 +117,11 @@ def main(path):
     _patch2(init_path, [(INIT_ANCHOR, INIT_ADD3)], "policies/__init__.py", "smolvla_speedaug")
     _patch2(path, [(CLASS_ANCHOR, CLASS_ADD4), (CFG_ANCHOR, CFG_ADD4)], "factory.py", "smolvla_tempo")
     _patch2(init_path, [(INIT_ANCHOR, INIT_ADD4)], "policies/__init__.py", "smolvla_tempo")
+    CLASS_ADD5 = CLASS_ADD4.replace("tempo", "dsel").replace("Tempo", "DSel")
+    CFG_ADD5 = CFG_ADD4.replace("tempo", "dsel").replace("Tempo", "DSel")
+    INIT_ADD5 = INIT_ADD4.replace("tempo", "dsel").replace("Tempo", "DSel")
+    _patch2(path, [(CLASS_ANCHOR, CLASS_ADD5), (CFG_ANCHOR, CFG_ADD5)], "factory.py", "smolvla_dsel")
+    _patch2(init_path, [(INIT_ANCHOR, INIT_ADD5)], "policies/__init__.py", "smolvla_dsel")
 
 
 if __name__ == "__main__":

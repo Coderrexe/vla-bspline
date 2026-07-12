@@ -169,8 +169,12 @@ class SmolVLASplineConfig(SmolVLAConfig):
         if self.speed_aug is not None:
             if len(self.speed_aug) < 2:
                 raise ValueError("speed_aug needs >= 2 factors to create heterogeneity")
-            if min(self.speed_aug) < 1.0:
-                raise ValueError("speed_aug factors must be >= 1 (s<1 clips deltas at the actuator bound)")
+            if min(self.speed_aug) < 1.0 and not self.predict_duration:
+                # v1 resamples the PATH: s<1 doubles deltas -> actuator clipping.
+                # v2 scales only the duration LABEL: any s>0 is safe (shape untouched).
+                raise ValueError("speed_aug factors must be >= 1 for the v1 head (s<1 clips deltas)")
+            if min(self.speed_aug) <= 0:
+                raise ValueError("speed_aug factors must be positive")
         if self.replan_margin is not None:
             if not self.predict_duration:
                 raise ValueError("replan_margin (self-paced replanning) requires predict_duration=true")

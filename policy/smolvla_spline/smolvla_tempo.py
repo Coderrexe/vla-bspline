@@ -89,8 +89,10 @@ class SmolVLATempoPolicy(SmolVLAPolicy):
         if pad is not None:
             pose = pose * (~pad).unsqueeze(-1).to(dt)
 
-        sp = torch.tensor(self.config.speeds, dtype=dt, device=dev)
-        v = sp[torch.randint(len(sp), (B,), device=dev)]        # (B,) random per sample
+        v = getattr(self, "_forced_v", None)                    # subclass hook (smolvla_dsel)
+        if v is None:
+            sp = torch.tensor(self.config.speeds, dtype=dt, device=dev)
+            v = sp[torch.randint(len(sp), (B,), device=dev)]    # (B,) random per sample
 
         path = torch.cat([torch.zeros_like(pose[:, :1]), torch.cumsum(pose, dim=1)], dim=1)
         # synthetic step j covers raw indices [j*v, (j+1)*v] -> sample path at j*v
