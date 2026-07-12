@@ -1,4 +1,4 @@
-# VLA-BSpline — Time-Aware Trajectory Action Heads for Vision-Language-Action Models
+# VLA-BSpline: Time-Aware Trajectory Action Heads for Vision-Language-Action Models
 
 A VLA policy should output a **continuous trajectory plus explicit time allocation**,
 not a fixed-rate list of waypoints. This repo implements that action head on top of
