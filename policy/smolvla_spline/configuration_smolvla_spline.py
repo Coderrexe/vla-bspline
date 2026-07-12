@@ -77,6 +77,7 @@ class SmolVLASplineConfig(SmolVLAConfig):
     # endpoint; only the fast portions of the time map compress.
     profile_alpha: float | None = None
     profile_speed_threshold: float = 0.7
+    profile_soft: bool = False  # sigmoid gate instead of hard threshold (no bang-bang dt)
 
     # Decode-consistency auxiliary loss (v2 only): the flow loss lives in
     # control-point space (6 tokens x 8 channels) where fine terminal detail is

@@ -157,12 +157,26 @@ B fixed-T at alpha=0.6 (uniform is its ONLY option): 77% @ 116.5 ≈ C-uniform (
 the gap comes from *selectivity*, not the representation. 95% binomial CI ≈ ±5–9 pts.
 
 **Headline reads (n=100, single checkpoint, only the *where* of the speedup differs):**
-1. ~~Free lunch~~ **FINAL (protocol-crossed, n=300 × 3 seed bases, C-n8, July 12):
-   base 94.0 @ 143.8; selective α.6 90.3 @ 114.7 (realized 1.25×); uniform α.6
-   88.7 @ 103.9 (1.38×). The single-cell "equal success" reading does not survive
-   pooling: the honest claim is a favorable TRADE — 20–28% execution-time
-   reduction for ~4–5 pts of success — adjustable post-hoc, with selectivity's
-   protection growing at aggressive α (+21 at α=0.4, §frontier).**
+1. ~~Free lunch~~ **FINAL (protocol-crossed, n=300 × 3 seed bases, C-n8, July 12) —
+   the retiming-GRANULARITY LADDER, one checkpoint, decode-only:**
+
+   | granularity of time authority | success @ realized speedup |
+   |---|---|
+   | base (no retiming) | 94.0 @ 1.0× |
+   | **interval-level: speed-profile gated, protect-slow (α.6, θ.7)** | **92.0 @ 1.30×** |
+   | chunk-level: event gated (sel α.6, thr 20) | 90.3 @ 1.25× |
+   | uniform (blind α.6) | 88.7 @ 1.38× |
+   | best retrained baseline (speed-as-input triad) | 76–80 @ ≤1.37× |
+
+   **Finer-grained authority over the time map monotonically buys success at
+   speed**: interval-level retiming (compress only intervals faster than 0.7×
+   chunk-mean, via an inverted piecewise-linear time-map warp; born from the v3
+   refutation's insight that the fit's implicit speed profile is near-exact)
+   Pareto-dominates chunk-level selectivity. Its settings-sensitivity is
+   mechanistic, not noise: compress slow intervals too (θ=0.5 → 83) or compress
+   too hard (α=0.5 → 81) and it breaks — *protecting slow motion is the
+   load-bearing property*. Scoping unchanged: precision-dominated suites pay
+   under ANY speedup (goal −24 @ 1.35×) — predicted speed ≠ rushability there.
 2. Aggressive blind speedup collapses monotonically (90→85→73→57); selective stays
    ≥76% everywhere. The duration head is what tells the policy which motions are safe
    to rush — inexpressible for fixed-time or waypoint heads.

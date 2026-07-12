@@ -120,8 +120,15 @@ def fig_headtohead():
     ours_sel = [(1.0, 90), (o_steps0 / 114.6, 90), (o_steps0 / 112.5, 84)]
     ours_uni = [(1.0, 90), (o_steps0 / 102.9, 88), (o_steps0 / 105.0, 73)]
     dsel = (t_steps0 / 114.3, 85)
+    # interval-level (speed-profile gated, protect-slow), protocol-crossed n=300:
+    # pooled base 94.0 @ 143.8 -> prof06 92.0 @ 110.4
+    interval = (143.8 / 110.4, 92.0)
 
     fig, ax = plt.subplots(figsize=(7.4, 5.0))
+    ax.scatter(*interval, s=230, marker="*", color=BLUE, edgecolor="white", lw=1.2,
+               zorder=5, label="ours: interval-level retiming (n=300, protocol-crossed)")
+    ax.annotate("−2 pts @ 1.30×", interval, textcoords="offset points",
+                xytext=(8, 7), fontsize=10, color=BLUE, fontweight="bold")
     ax.scatter(*dsel, s=110, marker="^", color=GREEN, edgecolor="white", lw=1.2,
                zorder=3, label="data-level selective retiming (retrained, fixed speed)")
     for pts, c, lab, m in [

@@ -437,8 +437,14 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             u0 = torch.arange(h_exec + 1, device=dev, dtype=torch.float64) / h_exec
             sp = deltas[0, :, :6].norm(dim=-1).double()                # (h,) per-interval speed
             thr = self.config.profile_speed_threshold * sp.mean()
-            dt = torch.where(sp > thr, torch.tensor(prof_a, dtype=torch.float64, device=dev),
-                             torch.tensor(1.0, dtype=torch.float64, device=dev))
+            if getattr(self.config, "profile_soft", False):
+                # smooth gate: dt ramps 1 -> alpha around the threshold, avoiding
+                # bang-bang velocity steps between adjacent intervals
+                w = torch.sigmoid((sp - thr) / (0.15 * sp.mean() + 1e-9))
+                dt = 1.0 - (1.0 - prof_a) * w
+            else:
+                dt = torch.where(sp > thr, torch.tensor(prof_a, dtype=torch.float64, device=dev),
+                                 torch.tensor(1.0, dtype=torch.float64, device=dev))
             cum = torch.cat([torch.zeros(1, device=dev, dtype=torch.float64), torch.cumsum(dt, 0)])
             hp = max(2, int(round(float(cum[-1]))))
             tq = torch.linspace(0, float(cum[-1]), hp + 1, device=dev, dtype=torch.float64)
