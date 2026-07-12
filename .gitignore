@@ -1,0 +1,40 @@
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs / outputs / large artifacts
+*.log
+outputs/
+wandb/
+*.npz
+*.pt
+*.pth
+*.ckpt
+
+# Env / secrets
+.env
+.env.*

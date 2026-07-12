@@ -429,7 +429,34 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
                 deltas = _path_deltas(h_exec)
         deltas = deltas.clamp(-1.0, 1.0)
 
-        if ease is not None and h_exec >= 4:
+        # Profile-selective retiming: compress time only where the chunk's own
+        # predicted speed is high; slow (precision/contact) intervals keep dt=1.
+        final_u = None
+        prof_a = self.config.profile_alpha if self.config.predict_duration else None
+        if prof_a is not None and ease is None and h_exec >= 4 and deltas.shape[0] == 1:
+            u0 = torch.arange(h_exec + 1, device=dev, dtype=torch.float64) / h_exec
+            sp = deltas[0, :, :6].norm(dim=-1).double()                # (h,) per-interval speed
+            thr = self.config.profile_speed_threshold * sp.mean()
+            dt = torch.where(sp > thr, torch.tensor(prof_a, dtype=torch.float64, device=dev),
+                             torch.tensor(1.0, dtype=torch.float64, device=dev))
+            cum = torch.cat([torch.zeros(1, device=dev, dtype=torch.float64), torch.cumsum(dt, 0)])
+            hp = max(2, int(round(float(cum[-1]))))
+            tq = torch.linspace(0, float(cum[-1]), hp + 1, device=dev, dtype=torch.float64)
+            # invert the monotone piecewise-linear time map t(u): u_new = u(tq)
+            idx = torch.searchsorted(cum, tq, right=True).clamp(1, h_exec)
+            c0, c1 = cum[idx - 1], cum[idx]
+            w = ((tq - c0) / (c1 - c0).clamp_min(1e-9)).clamp(0, 1)
+            u_new = u0[idx - 1] + w * (u0[idx] - u0[idx - 1])
+            u_new[0], u_new[-1] = 0.0, 1.0                             # exact endpoints
+            Bp = bspline_basis(u_new, self.config.n_ctrl, self.config.spline_degree).float().to(dev)
+            path = torch.einsum("hn,bnd->bhd", Bp, c_pose)
+            deltas = (path[:, 1:] - path[:, :-1]).clamp(-1.0, 1.0)
+            final_u = u_new
+            h_exec = hp
+
+        if final_u is not None:
+            u_grip = (final_u[:-1] + final_u[1:]) / 2   # interval midpoints, len = n_deltas
+        elif ease is not None and h_exec >= 4:
             ug_full = _u_grid(h_exec)
             u_grip = (ug_full[:-1] + ug_full[1:]) / 2   # interval midpoints, len = n_deltas
         else:
@@ -543,6 +570,8 @@ def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.s
         fit_end_weight = None
         ease_out = None
         decode_consistency_weight = 0.0
+        profile_alpha = None
+        profile_speed_threshold = 0.7
 
     class _Cfg(_StubBase):  # minimal duck-typed config for operator init
         n_ctrl, horizon, spline_degree, spline_stats_file = n, H, deg, "spline_stats_libero.json"

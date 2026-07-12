@@ -66,6 +66,18 @@ class SmolVLASplineConfig(SmolVLAConfig):
     # same path, exact endpoint, velocity tapering to ~0 at the event.
     ease_out: int | None = None
 
+    # Profile-selective retiming (v2, decode-only): compress execution time ONLY
+    # where the chunk's own predicted speed is high (transit), leaving slow
+    # precision/contact segments untouched — WITHIN-chunk selectivity driven by
+    # the policy's implicit speed profile (offline: the v2 fit reproduces the
+    # demo speed profile to 0.784 vs 0.782 terminal-deceleration ratio; the v3
+    # explicit-time-map redesign was refuted by the same study). Path intervals
+    # with |delta| > profile_speed_threshold × chunk-mean speed get their time
+    # scaled by profile_alpha (<1); slow intervals keep dt=1. Same path, same
+    # endpoint; only the fast portions of the time map compress.
+    profile_alpha: float | None = None
+    profile_speed_threshold: float = 0.7
+
     # Decode-consistency auxiliary loss (v2 only): the flow loss lives in
     # control-point space (6 tokens x 8 channels) where fine terminal detail is
     # a tiny loss fraction; waypoint policies supervise 50 per-step targets at
@@ -154,6 +166,11 @@ class SmolVLASplineConfig(SmolVLAConfig):
                 raise ValueError("replan_frac (self-paced replanning) requires predict_duration=true")
             if not (0.0 < self.replan_frac <= 1.0):
                 raise ValueError(f"replan_frac must be in (0, 1], got {self.replan_frac}")
+        if self.profile_alpha is not None:
+            if not self.predict_duration:
+                raise ValueError("profile_alpha (profile-selective retiming) requires predict_duration=true")
+            if not (0.0 < self.profile_alpha < 1.0):
+                raise ValueError(f"profile_alpha must be in (0,1), got {self.profile_alpha}")
         if self.ease_out is not None:
             if not self.predict_duration:
                 raise ValueError("ease_out requires predict_duration=true (event-terminated chunks)")
