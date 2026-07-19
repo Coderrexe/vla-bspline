@@ -88,10 +88,20 @@ censoring otherwise).
    this budget (K2: tail err +82%). Density ≥ ~0.33 ctrl/step at LIBERO 20fps.
 2. **Timing lives in ctrl-pt spacing** (v3 refutation): time-uniform fits reproduce
    demo speed profiles to ~0.02 rel err incl. terminal deceleration (0.784/0.782).
-3. **Retiming granularity ladder** (one ckpt, decode-only, n=300 crossed):
-   interval −2.0@1.30× > chunk −3.7@1.25× > uniform −5.3@1.38× > any retrained
-   baseline. Protecting slow intervals is the load-bearing property (θ=0.5 or α=0.5
-   breaks it: 81-83).
+3. **Retiming granularity — the effect AND its ordering are data-regime
+   coupled** (final form, July 15). LIBERO (scripted, n=300 crossed): retiming
+   costs success, finer gating costs least (interval −2.0@1.30× > chunk −3.7 >
+   uniform −5.3); protect-slow is load-bearing (θ=0.5 breaks it). CALVIN
+   (human teleop, 3 seeds × n=1000): retiming GAINS success, coarser gating
+   gains most (uniform +0.38@1.42×, t=12.1, all seeds > interval +0.27@1.33×,
+   t=9.1; U−P t=3.37 all seeds) and θ=0.5 is the best crossed cell (θ=0.3
+   regresses — only the extreme-slow tail needs protection). Unified law:
+   **scripted demos leave nothing to compress, so gating protects scarce
+   margin; human demos carry dead time everywhere, so compression should be
+   broad. Time authority appreciates as data gets more realistic, and its
+   optimal allocation is a decode-time knob, not an architecture decision.**
+   Seeded consequence: uniform-retimed spline matches-or-beats the waypoint
+   baseline (pooled +0.127, t=3.89; 2/3 seeds ahead) at 1.42× less wall-clock.
 4. **Replan before predicted events, never at them** (margin 0/2/4 → 84/90/93).
 5. **Speed ≠ rushability on precision suites** (goal/spatial collapse under ANY
    speedup) — event/speed signals gate safely only where transport dominates.
@@ -99,6 +109,13 @@ censoring otherwise).
    9 pts across seed sets × harnesses (spatial worst). No suite-ordering claims
    without protocol crossing; capability claims = within-protocol paired contrasts,
    pooled across ≥3 seed bases (n=300) for anything load-bearing.
+7. **The time budget is one budget — decode knobs don't compose** (July 12): full
+   stack (half-rate + stretch + interval retiming) = 64–69 vs stretch-alone 75,
+   interval-alone 92. Each knob spends the same timing slack; savings aren't
+   additive. Pick the single knob matched to the deployment constraint. (Ordering
+   still matters *within* a stack: feasibility must be re-checked AFTER any
+   compressive warp — post-warp per-interval dilation is implemented in decode —
+   but ordering wasn't the binding failure here.)
 
 ## 5. Baselines implemented (all in policy/smolvla_spline/)
 
@@ -119,8 +136,28 @@ the demo jitter floor (0.149 vs LIBERO 0.024 — 6× noisier demos; the spline i
 built-in denoiser). Config chosen: **n8/min_seg8/cap16** (duration signal logT σ=0.169
 beats n10's 0.107; both fits below noise floor). Stats:
 `spline_stats_calvin_v2_n8h16.json`. Eval: calvin_env installed (dedicated conda env
-"calvin"); before ANY success numbers, the 10fps-conversion semantics must pass an
-action-replay gate in the sim (converted actions → env → scene evolves as recorded).
+"calvin"; py3.10 shims: collections.Mapping et al., fractions.gcd, numpy==1.23.5,
+opencv-headless 4.8, setuptools<81).
+
+**Replay gate PASSED (July 12): the converted actions are STATE-RECOMPUTED 10 fps
+deltas** (Δpos×50, Δrot×20, gripper ±1), not naive subsamples. In-sim tracking RMSE:
+recomputed@repeat-3 = 0.0065 m (beats native 30 Hz replay 0.0100 — recomputed deltas
+self-correct); naive subsample@repeat-3 = 0.118 m (fails). **Execution convention
+locked: policy acts at 10 fps, each action held 3 sim steps at native 30 Hz.**
+
+**Eval harness = two processes** (calvin_env's numpy-1.23 pins conflict with
+lerobot): `calvin_policy_server.py` (lerobot env, GPU — loads any LeRobot ckpt with
+its saved processor pipeline via `make_policy(cfg, ds_meta=local calvin_v30)`) ↔
+`calvin_eval_client.py` (calvin env — official protocol: multistep_sequences loaded
+from the calvin repo with a stub for its lightning-heavy utils, vendored FNV-1
+initial-condition seeding for bit-identical official eval states, calvin_env task
+oracle, EP_LEN=360). Wire = length-prefixed pickles carrying bytes/lists only
+(numpy-2 pickles don't load in numpy-1.23). Gripper binarized to ±1 at the client.
+Cameras: static+gripper only — the tactile (tacto) camera hangs headless; the
+obs mapping is rgb_static→observation.images.top, rgb_gripper→wrist,
+robot_obs(15)→observation.state, scene_obs(24)→environment_state.
+`cluster/eval_calvin.sbatch <ckpt> [n_seq] [tag]` runs both. Pair-smoke passed
+(calvA@5k solved 1/2 first subtasks; ~1.5 min/sequence).
 
 ## 7. Cluster operations (hard-won)
 

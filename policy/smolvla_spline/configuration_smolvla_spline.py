@@ -47,8 +47,17 @@ class SmolVLASplineConfig(SmolVLAConfig):
     # predicted duration ABOVE the threshold at alpha x fewer steps (faster),
     # while short (grasp-critical) chunks run at full care. Only expressible
     # with a duration head — the throughput/success Pareto experiment.
+    # Action vector layout. "eef7" (LIBERO/CALVIN): pose deltas at dims 0-5,
+    # gripper at 6. "robocasa12" (RoboCasa365 PandaOmron): base_motion 0-3 +
+    # control_mode 4 (passthrough channels, fitted as their own low-order
+    # curves, no sign snap), EE pose 5-10, gripper 11.
+    action_layout: str = "eef7"
     speedup_alpha: float = 1.0        # <1.0 = faster execution of long chunks
     speedup_T_threshold: int = 0      # apply alpha only when predicted T > this
+    # Chunk-level SLOW-DOWN — the mirror knob: short predicted duration means a
+    # precision/contact motion (grasp approach), so give it MORE time.
+    slowdown_alpha: float = 1.0       # >1.0 = slower execution of short chunks
+    slowdown_T_threshold: int = 0     # apply slowdown only when predicted T <= this
 
     # Duration mode-snap (decode-only): the duration target is bimodal
     # (events ~22 vs cap 40); flow matching smears cap chunks down to ~30,
@@ -78,6 +87,12 @@ class SmolVLASplineConfig(SmolVLAConfig):
     profile_alpha: float | None = None
     profile_speed_threshold: float = 0.7
     profile_soft: bool = False  # sigmoid gate instead of hard threshold (no bang-bang dt)
+    # Interval-level SLOW-DOWN — expand intervals slower than profile_slow_threshold
+    # × chunk-mean speed by profile_slow_alpha (>1): precision micro-motions get
+    # more wall-clock. Composable with profile_alpha (bidirectional reallocation:
+    # compress transport intervals AND dilate contact intervals in one chunk).
+    profile_slow_alpha: float | None = None
+    profile_slow_threshold: float = 0.4
 
     # Decode-consistency auxiliary loss (v2 only): the flow loss lives in
     # control-point space (6 tokens x 8 channels) where fine terminal detail is
@@ -172,6 +187,18 @@ class SmolVLASplineConfig(SmolVLAConfig):
                 raise ValueError("profile_alpha (profile-selective retiming) requires predict_duration=true")
             if not (0.0 < self.profile_alpha < 1.0):
                 raise ValueError(f"profile_alpha must be in (0,1), got {self.profile_alpha}")
+        if self.action_layout not in ("eef7", "robocasa12"):
+            raise ValueError(f"unknown action_layout {self.action_layout!r}")
+        if self.profile_slow_alpha is not None:
+            if not self.predict_duration:
+                raise ValueError("profile_slow_alpha (interval slow-down) requires predict_duration=true")
+            if self.profile_slow_alpha <= 1.0:
+                raise ValueError(f"profile_slow_alpha must be > 1 (dilation), got {self.profile_slow_alpha}")
+        if self.slowdown_alpha != 1.0:
+            if self.slowdown_alpha < 1.0:
+                raise ValueError(f"slowdown_alpha must be > 1 (use speedup_alpha for <1), got {self.slowdown_alpha}")
+            if not self.predict_duration:
+                raise ValueError("slowdown_alpha (short-chunk slow-down) requires predict_duration=true")
         if self.ease_out is not None:
             if not self.predict_duration:
                 raise ValueError("ease_out requires predict_duration=true (event-terminated chunks)")

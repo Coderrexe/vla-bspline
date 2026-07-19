@@ -95,6 +95,16 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
     def _init_spline_operators(self, cfg: SmolVLASplineConfig):
         n, deg = cfg.n_ctrl, cfg.spline_degree
 
+        # Action-vector layout: where pose/grip/passthrough live in the env's
+        # action dim. Token layout stays [pose(6) | grip(1) | dur(1) | pass(k)]
+        # so eef7 targets are bit-identical to before the extension.
+        layout = getattr(cfg, "action_layout", "eef7")
+        if layout == "robocasa12":
+            self._pose_lo, self._grip_idx, self._pass_dims = 5, 11, (0, 1, 2, 3, 4)
+        else:  # eef7
+            self._pose_lo, self._grip_idx, self._pass_dims = 0, 6, ()
+        self._N_OUT = 8 + len(self._pass_dims)  # instance attr shadows class default
+
         if not cfg.predict_duration:
             # ---- v1: single fixed-length operator set ----
             H = cfg.horizon
@@ -153,6 +163,11 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
         if cfg.predict_duration:
             mean[:, 7] = float(s["logT_mean"])
             std[:, 7] = float(s["logT_std"])
+        if self._pass_dims:
+            # passthrough ctrl stats optional in older JSONs (default 0/1)
+            if "pass_ctrl_mean" in s:
+                mean[:, 8:] = torch.tensor(s["pass_ctrl_mean"], dtype=torch.float32)
+                std[:, 8:] = torch.tensor(s["pass_ctrl_std"], dtype=torch.float32)
         self.register_buffer("_tgt_mean", mean, persistent=False)
         self.register_buffer("_tgt_std", std, persistent=False)
 
@@ -166,9 +181,10 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
         cfg = self.config
         B, Hm, _ = a.shape
         ev = torch.zeros(B, Hm, dtype=torch.bool, device=a.device)
-        grip = a[..., 6]
+        p_lo = getattr(self, "_pose_lo", 0)
+        grip = a[..., getattr(self, "_grip_idx", 6)]
         ev[:, 1:] |= grip[:, 1:] != grip[:, :-1]                       # toggle
-        speed = a[..., :6].norm(dim=-1)                                # (B, Hm)
+        speed = a[..., p_lo : p_lo + 6].norm(dim=-1)                   # (B, Hm)
         # quantile(0.5) interpolates like numpy.median (torch.median picks the
         # lower-middle element, which under-thresholds half-slow windows)
         med = torch.quantile(speed, 0.5, dim=1, keepdim=True) + 1e-9
@@ -214,8 +230,11 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
                 f"expected action window of {want} steps, got {a.shape[1]} "
                 "(check action_delta_indices / dataset fps)"
             )
-        pose = a[..., : self._POSE_DIMS]
-        grip = a[..., self._POSE_DIMS]
+        p_lo = getattr(self, "_pose_lo", 0)
+        p_dims = getattr(self, "_pass_dims", ())
+        pose = a[..., p_lo : p_lo + self._POSE_DIMS]
+        grip = a[..., getattr(self, "_grip_idx", 6)]
+        pas = a[..., list(p_dims)] if p_dims else None
         pad = batch.get("action_is_pad")
         if pad is not None:
             # zero pose deltas past episode end => the target path comes to a stop.
@@ -278,8 +297,23 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
                 T_lab = T_lab * self._speed_factors(batch, pose.dtype, pose.device)
             dur = torch.log(T_lab).unsqueeze(-1).expand(-1, cfg.n_ctrl)
 
-        tgt = torch.cat([c_pose, c_grip.unsqueeze(-1), dur.unsqueeze(-1)], dim=-1)
-        return (tgt - self._tgt_mean) / self._tgt_std                  # (B, n, 8)
+        parts = [c_pose, c_grip.unsqueeze(-1), dur.unsqueeze(-1)]
+        if pas is not None:
+            # passthrough channels (base/mode): same low-order curve fit as the
+            # gripper channel, one per dim, no sign snap at decode
+            if not cfg.predict_duration:
+                c_pas = torch.einsum("nh,bhk->bnk", self._pinv_grip, pas)
+            else:
+                c_pas = torch.einsum("bnh,bhk->bnk", pg, pas)
+            parts.append(c_pas)
+        tgt = torch.cat(parts, dim=-1)
+        tgt = (tgt - self._tgt_mean) / self._tgt_std                   # (B, n, N_OUT)
+        if pas is not None:
+            # passthrough channels are near-constant on fixed-base episodes
+            # (std -> eps) but active on mobile ones -> rare 100-sigma outliers
+            # that blow up the flow loss (observed: rc loss 33). Winsorize.
+            tgt = torch.cat([tgt[..., :8], tgt[..., 8:].clamp(-5.0, 5.0)], dim=-1)
+        return tgt
 
     # ------------------------------------------------------------------ train
     def forward(self, batch: dict[str, Tensor], noise=None, time=None, reduction: str = "mean"):
@@ -429,22 +463,30 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
                 deltas = _path_deltas(h_exec)
         deltas = deltas.clamp(-1.0, 1.0)
 
-        # Profile-selective retiming: compress time only where the chunk's own
-        # predicted speed is high; slow (precision/contact) intervals keep dt=1.
+        # Profile retiming: reallocate time using the chunk's own speed profile.
+        # Fast intervals (transport) can be compressed (profile_alpha < 1); the
+        # slowest intervals (precision/contact micro-motion) can be dilated
+        # (profile_slow_alpha > 1). Either alone, or both = bidirectional.
         final_u = None
         prof_a = self.config.profile_alpha if self.config.predict_duration else None
-        if prof_a is not None and ease is None and h_exec >= 4 and deltas.shape[0] == 1:
+        prof_s = getattr(self.config, "profile_slow_alpha", None) if self.config.predict_duration else None
+        if (prof_a is not None or prof_s is not None) and ease is None and h_exec >= 4 \
+                and deltas.shape[0] == 1:
             u0 = torch.arange(h_exec + 1, device=dev, dtype=torch.float64) / h_exec
             sp = deltas[0, :, :6].norm(dim=-1).double()                # (h,) per-interval speed
-            thr = self.config.profile_speed_threshold * sp.mean()
-            if getattr(self.config, "profile_soft", False):
-                # smooth gate: dt ramps 1 -> alpha around the threshold, avoiding
-                # bang-bang velocity steps between adjacent intervals
-                w = torch.sigmoid((sp - thr) / (0.15 * sp.mean() + 1e-9))
-                dt = 1.0 - (1.0 - prof_a) * w
-            else:
-                dt = torch.where(sp > thr, torch.tensor(prof_a, dtype=torch.float64, device=dev),
-                                 torch.tensor(1.0, dtype=torch.float64, device=dev))
+            dt = torch.ones(h_exec, device=dev, dtype=torch.float64)
+            if prof_a is not None:
+                thr = self.config.profile_speed_threshold * sp.mean()
+                if getattr(self.config, "profile_soft", False):
+                    # smooth gate: dt ramps 1 -> alpha around the threshold, avoiding
+                    # bang-bang velocity steps between adjacent intervals
+                    w = torch.sigmoid((sp - thr) / (0.15 * sp.mean() + 1e-9))
+                    dt = 1.0 - (1.0 - prof_a) * w
+                else:
+                    dt = torch.where(sp > thr, torch.tensor(prof_a, dtype=torch.float64, device=dev), dt)
+            if prof_s is not None:
+                thr_s = self.config.profile_slow_threshold * sp.mean()
+                dt = torch.where(sp < thr_s, torch.tensor(prof_s, dtype=torch.float64, device=dev), dt)
             cum = torch.cat([torch.zeros(1, device=dev, dtype=torch.float64), torch.cumsum(dt, 0)])
             hp = max(2, int(round(float(cum[-1]))))
             tq = torch.linspace(0, float(cum[-1]), hp + 1, device=dev, dtype=torch.float64)
@@ -456,7 +498,31 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             u_new[0], u_new[-1] = 0.0, 1.0                             # exact endpoints
             Bp = bspline_basis(u_new, self.config.n_ctrl, self.config.spline_degree).float().to(dev)
             path = torch.einsum("hn,bnd->bhd", Bp, c_pose)
-            deltas = (path[:, 1:] - path[:, :-1]).clamp(-1.0, 1.0)
+            deltas = path[:, 1:] - path[:, :-1]
+            if self.config.feasibility_stretch:
+                # feasibility must hold AFTER retiming: compressed intervals can
+                # re-violate the actuator bound (composition ordering — measured:
+                # stack at half rate 69 vs stretch-alone 75 before this fix).
+                # Dilate only the violating intervals' dt and rebuild once.
+                sp2 = deltas[0, :, :6].norm(dim=-1).double()
+                over = deltas[0].abs().max(dim=-1).values.double() / self.config.actuator_bound
+                if float(over.max()) > 1.0:
+                    dt2 = torch.ones(hp, device=dev, dtype=torch.float64)
+                    dt2 = torch.maximum(dt2, over)         # stretch violators
+                    cum2 = torch.cat([torch.zeros(1, device=dev, dtype=torch.float64),
+                                      torch.cumsum(dt2, 0)])
+                    hp2 = max(2, int(round(float(cum2[-1]))))
+                    tq2 = torch.linspace(0, float(cum2[-1]), hp2 + 1, device=dev, dtype=torch.float64)
+                    idx2 = torch.searchsorted(cum2, tq2, right=True).clamp(1, hp)
+                    d0, d1 = cum2[idx2 - 1], cum2[idx2]
+                    w2 = ((tq2 - d0) / (d1 - d0).clamp_min(1e-9)).clamp(0, 1)
+                    u_new = u_new[idx2 - 1] + w2 * (u_new[idx2] - u_new[idx2 - 1])
+                    u_new[0], u_new[-1] = 0.0, 1.0
+                    Bp = bspline_basis(u_new, self.config.n_ctrl, self.config.spline_degree).float().to(dev)
+                    path = torch.einsum("hn,bnd->bhd", Bp, c_pose)
+                    deltas = path[:, 1:] - path[:, :-1]
+                    hp = hp2
+            deltas = deltas.clamp(-1.0, 1.0)
             final_u = u_new
             h_exec = hp
 
@@ -483,7 +549,20 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             s_prime = (pts[:, 1] - pts[:, 0]) / float(u_pair[1] - u_pair[0])
             self._prev_step_vel = (s_prime / h_exec).detach()          # (B, 6) per-step
 
-        return torch.cat([deltas, grip], dim=-1)                       # (B, h_exec, 7)
+        p_dims = getattr(self, "_pass_dims", ())
+        if not p_dims:
+            return torch.cat([deltas, grip], dim=-1)                   # (B, h_exec, 7)
+
+        # layout with passthrough channels (robocasa12): sample them at the same
+        # u grid (continuous, no snap) and place every block at its env position
+        c_pas = t[..., 8: 8 + len(p_dims)]                             # (B, n, k)
+        pas = torch.einsum("hn,bnk->bhk", Bg.to(dev), c_pas)           # (B, h, k)
+        D = len(p_dims) + self._POSE_DIMS + 1
+        out = torch.zeros(deltas.shape[0], deltas.shape[1], D, device=dev, dtype=deltas.dtype)
+        out[..., list(p_dims)] = pas
+        out[..., self._pose_lo : self._pose_lo + self._POSE_DIMS] = deltas
+        out[..., self._grip_idx] = grip.squeeze(-1)
+        return out                                                     # (B, h_exec, D)
 
     def _get_action_chunk(self, batch: dict[str, Tensor], noise: Tensor | None = None, **kwargs) -> Tensor:
         for k in batch:
@@ -510,6 +589,9 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             alpha = 1.0
             if self.config.speedup_alpha < 1.0 and T > self.config.speedup_T_threshold:
                 alpha = self.config.speedup_alpha  # duration-aware selective speedup
+            elif self.config.slowdown_alpha > 1.0 and T <= self.config.slowdown_T_threshold:
+                # mirror knob: short T = precision/contact motion -> more time
+                alpha = self.config.slowdown_alpha
             h_exec = max(2, round(T * self.config.exec_rate_ratio * alpha))
             # soft landing only into predicted EVENTS (contact), not cap chunks
             self._ease_this_chunk = (
@@ -578,6 +660,11 @@ def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.s
         decode_consistency_weight = 0.0
         profile_alpha = None
         profile_speed_threshold = 0.7
+        profile_soft = False
+        profile_slow_alpha = None
+        profile_slow_threshold = 0.4
+        slowdown_alpha = 1.0
+        slowdown_T_threshold = 0
 
     class _Cfg(_StubBase):  # minimal duck-typed config for operator init
         n_ctrl, horizon, spline_degree, spline_stats_file = n, H, deg, "spline_stats_libero.json"
@@ -730,7 +817,81 @@ def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.s
     print(f"velocity coefficient s'(0) per c1: {coeff:.4f} (expect 9)")
     assert abs(coeff - 9.0) < 1e-3
 
-    print("SELF-TEST PASSED (v1 + v2 + chaining math)")
+    # ---------------- slow-down decode: interval dilation + bidirectional ----------------
+    # Build a token whose decoded chunk has a fast first half and slow second half,
+    # then check: (a) slow-only dilation lengthens execution and dilates ONLY the
+    # slow intervals; (b) bidirectional (compress fast + dilate slow) preserves the
+    # exact endpoint; (c) chunk-level slowdown_alpha stretches h_exec.
+    class _CfgSlow(_CfgV2):
+        profile_slow_alpha = 1.5
+        profile_slow_threshold = 0.5
+
+    a_sl = torch.zeros(1, 40, 7)
+    a_sl[:, :20, :6] = 0.30      # fast transport half
+    a_sl[:, 20:, :6] = 0.03      # slow precision half
+    a_sl[..., 6] = -1.0          # no toggle -> cap chunk
+    h5 = _HolderV2()
+    h5.config = _CfgSlow
+    SmolVLASplinePolicy._init_spline_operators(h5, _CfgSlow)
+    h5._first_event = SmolVLASplinePolicy._first_event.__get__(h5)
+    tgt_sl = SmolVLASplinePolicy._build_spline_targets(h5, {ACTION: a_sl})
+    fake_sl = type("obj", (), {"config": _CfgSlow, "_N_OUT": 8, "_tgt_mean": h5._tgt_mean,
+                               "_tgt_std": h5._tgt_std, "_ease_this_chunk": False,
+                               "_chain_c1": None})()
+    fake_sl.config.chain_velocity = False
+    out_sl = SmolVLASplinePolicy._decode_tokens(fake_sl, tgt_sl, 20)
+    e_end = (out_sl[..., :6].sum(1) - a_sl[..., :6].sum(1)).abs().max().item()
+    assert out_sl.shape[1] > 20, f"slow dilation must lengthen execution, got {out_sl.shape[1]}"
+    print(f"slow-down decode: 20 -> {out_sl.shape[1]} steps, endpoint err {e_end:.2e}")
+    assert e_end < 5e-2
+
+    class _CfgBidir(_CfgSlow):   # bidirectional: compress fast AND dilate slow
+        profile_alpha = 0.6
+        profile_speed_threshold = 0.7
+        # compressing this hot chunk (deltas ~0.67/dim at h=20) violates the
+        # actuator bound; post-warp feasibility dilation must repair it
+        feasibility_stretch = True
+
+    fake_bd = type("obj", (), {"config": _CfgBidir, "_N_OUT": 8, "_tgt_mean": h5._tgt_mean,
+                               "_tgt_std": h5._tgt_std, "_ease_this_chunk": False,
+                               "_chain_c1": None})()
+    out_bd = SmolVLASplinePolicy._decode_tokens(fake_bd, tgt_sl, 20)
+    e_bd = (out_bd[..., :6].sum(1) - a_sl[..., :6].sum(1)).abs().max().item()
+    worst_bd = out_bd[..., :6].abs().max().item()
+    print(f"bidirectional decode (+feasibility): 20 -> {out_bd.shape[1]} steps, "
+          f"endpoint err {e_bd:.2e}, worst |delta| {worst_bd:.3f}")
+    assert e_bd < 5e-2 and worst_bd <= 1.0 + 1e-6
+
+    # ---------------- robocasa12 action layout: round-trip ----------------
+    class _CfgRC(_CfgV2):
+        action_layout = "robocasa12"
+
+    hrc = _HolderV2()
+    hrc.config = _CfgRC
+    SmolVLASplinePolicy._init_spline_operators(hrc, _CfgRC)
+    hrc._first_event = SmolVLASplinePolicy._first_event.__get__(hrc)
+    a_rc = torch.zeros(2, 40, 12)
+    a_rc[..., 0:4] = 0.05          # base motion (passthrough)
+    a_rc[..., 4] = 1.0             # control mode (passthrough, constant)
+    a_rc[..., 5:11] = 0.2          # EE pose deltas
+    a_rc[..., 11] = -1.0
+    a_rc[0, 12:, 11] = 1.0         # toggle at 12 for sample 0
+    tgt_rc = SmolVLASplinePolicy._build_spline_targets(hrc, {ACTION: a_rc})
+    assert tuple(tgt_rc.shape) == (2, n, 13), f"robocasa targets shape {tuple(tgt_rc.shape)}"
+    fake_rc = type("obj", (), {"config": _CfgRC, "_N_OUT": 13, "_tgt_mean": hrc._tgt_mean,
+                               "_tgt_std": hrc._tgt_std, "_pose_lo": 5, "_grip_idx": 11,
+                               "_pass_dims": (0, 1, 2, 3, 4), "_POSE_DIMS": 6,
+                               "_ease_this_chunk": False, "_chain_c1": None})()
+    out_rc = SmolVLASplinePolicy._decode_tokens(fake_rc, tgt_rc, 12)
+    assert tuple(out_rc.shape) == (2, 12, 12), f"robocasa decode shape {tuple(out_rc.shape)}"
+    e_pose = (out_rc[0, :, 5:11].sum(0) - a_rc[0, :12, 5:11].sum(0)).abs().max().item()
+    e_pass = (out_rc[..., 4] - 1.0).abs().max().item()
+    ok_grip = bool(((out_rc[..., 11] == 1.0) | (out_rc[..., 11] == -1.0)).all())
+    print(f"robocasa12 layout: pose endpoint err {e_pose:.2e}, mode-channel err {e_pass:.2e}, "
+          f"grip snapped: {ok_grip}")
+    assert e_pose < 1e-3 and e_pass < 5e-2 and ok_grip
+
+    print("SELF-TEST PASSED (v1 + v2 + chaining + slow-down + robocasa12)")
 
 
 if __name__ == "__main__":

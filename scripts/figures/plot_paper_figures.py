@@ -156,7 +156,73 @@ def fig_headtohead():
     print("saved outputs/fig_headtohead.png")
 
 
+def fig_calvin():
+    # CALVIN ABCD->D, official protocol, SEEDED: 3 training seeds x n=1000 x 4 arms.
+    # Left: pooled SR curves (n=3000/arm). Right: the granularity INVERSION —
+    # retiming delta vs base by gating granularity, LIBERO vs CALVIN.
+    import json
+    import os
+    d = json.load(open(os.path.join(os.path.dirname(__file__), "data",
+                                    "calvin_seeded_final.json")))
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(11.6, 4.6))
+
+    ks = [1, 2, 3, 4, 5]
+    for key, c, lab, m in [
+        ("U", BLUE, "spline + uniform retiming @1.42×  avg 1.69±.08", "*"),
+        ("P", SKY, "spline + interval retiming @1.33×  avg 1.58±.11", "D"),
+        ("A", BLACK, "waypoint SmolVLA (best config)  avg 1.56±.15", "s"),
+        ("C", "0.55", "spline base (un-retimed)  avg 1.31±.08", "o"),
+    ]:
+        sr = d[key]["sr_pooled"]
+        ax.plot(ks, sr, "-" + m, color=c, lw=2.2, ms=12 if m == "*" else 7,
+                label=lab, markeredgecolor="white", markeredgewidth=1.2)
+    ax.annotate("retiming − base: +0.38, t=12.1,\npositive on every seed",
+                (3, 27.8), textcoords="offset points", xytext=(10, 12),
+                fontsize=9.5, color=BLUE, fontweight="bold")
+    ax.set_xticks(ks)
+    ax.set_xlabel("tasks completed in chain  (≥ k)")
+    ax.set_ylabel("success rate  (%)")
+    ax.set_title("CALVIN ABCD→D, official protocol — 3 training seeds × 1000 chains\n"
+                 "pooled per arm (n=3000); all arms 100k, zero per-benchmark tuning",
+                 fontsize=11.5, loc="left")
+    ax.legend(loc="upper right", frameon=False, fontsize=9)
+
+    # granularity inversion: delta vs base by gating granularity (coarse->fine),
+    # LIBERO = success pts (n=300 crossed), CALVIN = avg_len % of base (seeded)
+    grans = ["uniform", "chunk", "interval"]
+    lib = [-5.3, -3.7, -2.0]
+    cb = 1.311
+    cal = [100 * d["U-C"]["mean"] / cb, 100 * (1.58 - 1.42) / 1.42,  # chunk: sel06 crossed slices
+           100 * d["P-C"]["mean"] / cb]
+    x = [0, 1, 2]
+    ax2.axhline(0, color="0.6", lw=1)
+    ax2.plot(x, lib, "-o", color=VERM, lw=2, ms=9, label="LIBERO (scripted): success Δ, pts",
+             markeredgecolor="white", markeredgewidth=1.2)
+    ax2.plot(x, cal, "-", color=BLUE, lw=2, zorder=2,
+             label="CALVIN (human teleop): avg_len Δ, %")
+    ax2.plot([0, 2], [cal[0], cal[2]], "o", color=BLUE, ms=9, zorder=3,
+             markeredgecolor="white", markeredgewidth=1.2)
+    ax2.plot([1], [cal[1]], "o", color="white", ms=9, zorder=3,
+             markeredgecolor=BLUE, markeredgewidth=1.8)
+    ax2.annotate("n=200\n(others n=3000)", (1, cal[1]), xytext=(0, -30),
+                 textcoords="offset points", fontsize=8, color=BLUE, ha="center")
+    ax2.annotate("finer gating better\n(margin is scarce)", (2, -2.0), xytext=(-6, -30),
+                 textcoords="offset points", fontsize=9, color=VERM, ha="center")
+    ax2.annotate("coarsest gating best\n(dead time is everywhere)", (0, cal[0]),
+                 xytext=(8, -22), textcoords="offset points", fontsize=9, color=BLUE)
+    ax2.set_xticks(x); ax2.set_xticklabels(["uniform\n(coarsest)", "chunk-level", "interval-level\n(finest)"])
+    ax2.set_ylabel("retiming effect vs base decode")
+    ax2.set_ylim(-9, 33)
+    ax2.set_title("The granularity inversion — where to spend time authority\n"
+                  "flips with data regime",
+                  fontsize=11.5, loc="left")
+    ax2.legend(loc="center right", frameon=False, fontsize=9)
+    fig.tight_layout(); fig.savefig("outputs/fig_calvin.png"); plt.close(fig)
+    print("saved outputs/fig_calvin.png")
+
+
 if __name__ == "__main__":
     fig_pareto()
     fig_hz()
     fig_headtohead()
+    fig_calvin()

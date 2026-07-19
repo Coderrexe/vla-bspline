@@ -321,3 +321,315 @@ sends it — the duration channel — while shape channels stayed provably clean
 | `RESULTS.md` | living numbers digest |
 | `PROJECT.md` | full technical writeup (this doc's source) |
 | `SPEED_AUG_DESIGN.md`, `C_FIX_DESIGN.md` | design docs for the two biggest sub-investigations |
+
+---
+---
+
+# Part II — July 8–15 (everything after the sections above)
+
+Sections 9–17 continue the story. The arc in one paragraph: we discovered that the
+*evaluation protocol* itself was producing several of our suite-level "gaps" (§9), which
+closed the spatial investigation (§10) and promoted n8 to the final config with full
+3-seed parity (§11). We then answered "where should speed control live" with a
+three-way benchmark against retrained baselines (§12), invented a finer-grained retiming
+knob out of a refuted redesign (§13), and found the limits of what composes (§14). The
+duration head turned out to double as a runtime failure detector (§15). Then the big
+one: we ported everything to CALVIN — a second benchmark, second robot, and crucially
+*human-teleop* (noisy) demonstrations — built its official evaluator from scratch
+(§16), and found that on noisy data our decode-time retiming stops being a trade-off
+and becomes a simultaneous win in success *and* speed, seed-robust at n=1000 scale
+(§17). That result, its mechanism, and a real-world plan (§18) are where the project
+stands.
+
+## 9. The discovery that changed our rules of evidence: protocol variance
+
+While chasing the spatial gap (§6.2-6.3 above), we ran the *same checkpoint* through
+different evaluation harnesses and different environment-seed sets. The "gap" moved:
+
+| same Cn8 checkpoint, spatial | result |
+|---|---|
+| lerobot-eval harness, 3 eval-seeds | 77 vs A's 84 (the "gap") |
+| our rollout harness, seed base 1000 | 81 vs A's 81 (gone) |
+| our rollout harness, seed base 2000 | **79 vs A's 74 (sign flip!)** |
+
+Same model, same suite — the ordering between A and C depends on which harness and
+which seed set you ask. Same-checkpoint spread reaches **9 points** at n=100. The goal
+suite did the same thing in the opposite direction (our favorable "Cn8 goal 89.3 > A
+86" also dissolved under the rollout protocol). Duplicate runs of an identical
+configuration differ by ±5.
+
+**Standing rules since (used for every claim below):**
+1. No suite-level ordering claim in either direction without *protocol crossing*
+   (reproducing it under a second harness or seed set).
+2. Load-bearing numbers get pooled across ≥3 seed bases (n=300).
+3. Capability claims are *paired same-checkpoint contrasts* (only the decode flag
+   differs), which subtracts out most of this noise.
+
+This is also a publishable methodological point: LIBERO comparisons at n=100 with
+training-seed error bars alone are not sufficient evidence.
+
+## 10. The contact/spatial investigation — closed, with the cause identified
+
+The spatial deficit (§6.2) got a full elimination ladder. Each row is a controlled
+experiment:
+
+| hypothesis | test | verdict |
+|---|---|---|
+| global fit fidelity | n6→n8 capacity | helps object/long; spatial gain didn't survive seed 2 |
+| contact-local fit fidelity | end-weighted LSQ ("W9": weight ramps ×9 over last 25% of chunk) | tail fit error −23 to −56%, success **unchanged** — fit near contact was NOT the binding constraint |
+| knot placement near contact | redistribute interior knots toward the event end (γ-warp) | **backfires**: at n6 tail +82% worse; at n8 (14.9k segments) strictly dominated by W9 at every γ — tail −5% at best while body degrades +17-36% |
+| generative variance | K=16 sample dispersion, A vs C, by phase | equal — eliminated |
+| **evaluation protocol** | §9 crossing | **the gap is largely protocol artifact** |
+
+(The knot-redistribution row is the direct answer to Xiatao's July suggestion of
+"allocating more control points near the grasping region": tested at production
+capacity, offline, zero GPU — reweighting the fit beats reallocating knots, and even
+reweighting doesn't move success.)
+
+**What IS real near contact — kinematics, not shape.** Demonstrations decelerate to
+0.555× cruise speed at gripper toggles; our executed rollouts toggled at 0.877× —
+the fit smooths away terminal deceleration (position is pinned at the event, velocity
+is not). Fix: **ease-out decode** — retime the last 3 path steps over a cosine-spaced
+schedule (endpoint exact to 6e-8, terminal velocity ×0.14). Inert at fixed replan
+cadence, real for self-paced mode (66→71 long-horizon; executed toggle ratio 0.844 →
+0.766 ≈ A's 0.750). Kept as a deployment/hardware feature, not a sim headline.
+
+## 11. Final LIBERO main table — n8 promoted, three seeds, everything crossed
+
+The n8 3rd seeds landed and resolved §6.3's open question:
+
+| arm | per-suite seed-means obj/spa/goal/long | avg ± sd |
+|---|---|---|
+| A waypoint | 94.7 / 84.3 / 86.0 / 63.3 | **82.1 ± 1.8** |
+| B spline n8 | 96.3 / 77.7 / 84.0 / 65.3 | **80.8 ± 2.5** |
+| C spline+time n8 | 92.3 / 77.3 / 89.3 / 63.7 | **80.7 ± 1.3** |
+
+**Reads:** all three arms within ~1.4 points with overlapping error bars = **seeded
+parity**; C remains the most seed-stable arm; and given §9, we make *no* suite-level
+ordering claims — the honest differentiation between arms lives entirely in the
+capability set (retiming, stretch, self-pacing, monitoring), not the main table.
+
+## 12. Where should speed control live? — the three-way benchmark
+
+Anyone can want a faster robot. The design question is *where the speed knob sits*.
+Three architectures, all trained to the same 100k budget on the same data, all
+evaluated by *realized* speedup (actual steps saved, not commanded speed):
+
+| approach | knob location | object success @ realized speedup |
+|---|---|---|
+| speed-as-input ("tempo", TempoVLA-style: retime the training data, feed a speed scalar as input) | retrain + runtime input | 98 @ 1.0×, 80 @ 1.37×, **43 @ 1.43× (saturates — commanded 2× only realizes 1.43×)** |
+| data-level selection ("dsel": bake event-aware retiming into training data) | retrain, fixed | 85 @ 1.18× (no runtime knob at all) |
+| **ours: decode-time retiming** | **zero retraining, per-chunk adjustable** | **90 @ 1.26× (sel06), 88 @ 1.40×** (uni06) |
+
+At matched realized ~1.4×: ours 88 vs tempo's 43. One honest extra finding: tempo's
+multi-speed *training augmentation* is a genuine regularizer at 1× (98 vs A's ~95) —
+and it's composable with our head in principle (future work).
+
+## 13. The retiming-granularity ladder — a refuted redesign turned into the best knob
+
+We attempted a fundamental redesign ("v3"): make the spline a pure *shape* in
+arc-length and add an explicit learned time-map (per-span durations) — "complete"
+time allocation. Before spending any GPU, an offline study on 14.9k segments killed
+it: **the standard time-uniform fit already reproduces the demonstration's speed
+profile almost exactly** (toggle-deceleration ratio 0.784 vs demos' 0.782) — because
+control-point *spacing* encodes timing implicitly at full fitting resolution, while
+v3's 5-span explicit map is coarser. Zero GPU wasted; one insight gained: **the
+decoded chunk already knows its own speed profile.**
+
+That insight became a new decode flag: **interval-level (profile-selective) retiming**
+— within a chunk, compress only the intervals whose speed exceeds θ× the chunk mean
+(the fast transport portions), leave slow precision intervals untouched; implemented
+as an inverted piecewise-linear warp of the sampling grid (endpoint exact). This
+completes a *granularity ladder* for time authority, all decode-only on one
+checkpoint (object, protocol-crossed, n=300):
+
+| granularity | success @ realized |
+|---|---|
+| base (no retiming) | 94.0 @ 1.0× |
+| **interval-level (α=.6, θ=.7)** | **92.0 @ 1.30×** |
+| chunk-level (T̂-gated, §6.4) | 90.3 @ 1.25× |
+| uniform (blind) | 88.7 @ 1.38× |
+| best retrained baseline (§12) | 76-80 @ ≤1.37× |
+
+On LIBERO: **finer authority = cheaper speed**, and *protecting slow intervals is the
+load-bearing property* (θ=0.5 — compressing slow intervals too — breaks it to 83;
+α=0.5 breaks it to 81). Settings-sensitivity is mechanistic, not noise. Note the
+"free lunch" of §6.4 is retired: pooled and crossed, speed costs ~2-5 points on
+LIBERO at every granularity. Keep this in mind for §17, where the sign flips.
+
+## 14. What does NOT compose — three clean negatives
+
+1. **Temporal augmentation can't regularize the C head** (structural null): retiming
+   a demo changes only the duration *label*, never the fitted shape target — that's
+   the factorization working as designed, §6.6 — so there is nothing for shape
+   regularization to grab. The factorization is immune to timing noise AND unable to
+   harvest timing augmentation. Confirmed by a 20k pilot (no gain).
+2. **Decode-time knobs don't stack**: half-rate execution + feasibility stretch +
+   interval retiming = 64-69 vs stretch-alone 75 vs retiming-alone 92. **The time
+   budget is one budget** — each knob spends the same slack; pick the one matched to
+   the deployment constraint. (A real ordering bug was found and fixed on the way:
+   feasibility must be re-checked *after* any compressive warp — but the fix wasn't
+   the binding issue; the composition itself is.)
+3. **Decode-consistency auxiliary loss** (differentiable decode inside training,
+   penalizing x₀-space path error — our candidate for closing the §10 toggle-ratio
+   gap from the learning side): 20k pilot obj 88 / spatial 62 vs twin's 89 / 72.
+   No gain anywhere. Thread closed; the toggle-ratio residual stands as a documented
+   structural limit with ease-out as the decode-side mitigation.
+
+## 15. The duration head is also a runtime failure monitor
+
+Free capability, discovered by looking at T̂ traces: on failures, T̂ *stagnates*
+(the countdown stops counting down — the policy predicts "~14 steps left" forever
+while fumbling). On 260 episodes: failures stall 2× more (stall-fraction 0.414 vs
+0.216, ~2.2σ). As an online detector: **86% precision / 52% recall** whole-episode;
+at a stricter threshold, 100%-precision abort signals. No existing VLA has an
+endogenous progress monitor — ours is a column we were already predicting.
+
+⚠️ Scoped honestly: (1) *detection* is real; kinematic self-*recovery* (back off and
+retry on alarm) does not convert failures — fumbles are persistent incompetence, not
+perturbation traps. The payoff is flagging/escalation, not self-repair. (2) The
+monitor needs duration-signal *range*: it does NOT transfer to the CALVIN config
+(§17), whose cap of 16 compresses T̂ into [13,16] — no countdown dynamic, recall ≤4%.
+A capability coupled to config headroom, stated as such.
+
+## 16. CALVIN — the second benchmark, built end-to-end
+
+Why CALVIN: different robot (Franka), different tasks (5-instruction chains,
+language-conditioned), and — the property that turned out to matter most —
+**human-teleop demonstrations** (jitter floor 6× higher than LIBERO's scripted
+demos: 0.149 vs 0.024). Everything below was verified before any success number was
+trusted:
+
+1. **Dataset**: `fywang/calvin-task-ABCD-D-lerobot` (24k episodes, 10fps), converted
+   to LeRobot v3.0. Offline gate first: CALVIN segments are event-richer than LIBERO
+   (gripper events in 41-54% of chunks), and our fit error sits *below* the demo
+   noise floor — the spline is a built-in denoiser there. Config chosen from offline
+   stats alone (n8, cap 16), zero rollout tuning.
+2. **Action-semantics replay gate** (mandatory before evals): replaying converted
+   actions in the simulator to determine what they actually are. Verdict: the 10fps
+   actions are *state-recomputed* deltas, and the correct execution convention is
+   one policy action held for 3 sim steps at native 30Hz — tracking RMSE 0.0065m,
+   vs 0.118m (18× worse) for the naive-subsample interpretation we might otherwise
+   have assumed.
+3. **Official evaluator, two-process**: calvin_env needs an old numpy that conflicts
+   with lerobot, so the policy runs in one process (GPU) and the simulator in
+   another, joined by a socket. The protocol is the *official* one: 1000 five-task
+   chains from CALVIN's own sequence generator (bit-identical seeding — we
+   reimplemented their hash so initial scene states match the official evaluation
+   exactly), their task oracle for success, 360-step budget per subtask. Sharded
+   10× so a full n=1000 evaluation runs in ~1.5h of queue time.
+4. **The cadence lesson replicated immediately**: SmolVLA's default replan cadence
+   (nas=50 = a 5-second open loop at 10fps) scores 0.52 avg_len; at nas=10 it scores
+   1.24-1.55. Same confound as §6.1, second benchmark. All comparisons cadence-fair
+   since. Bonus finding: the spline arm is cadence-*robust* (1.36 vs 1.39 at
+   nas 10 vs 5) while the waypoint arm is sharply peaked — the event-aligned chunks
+   don't care as much when you cut them.
+
+## 17. The CALVIN result — the headline of the project
+
+**Final matrix: 3 training seeds × n=1000 official chains × 4 arms = 12,000 evaluated
+chains.** `avg_len` = average tasks completed per 5-task chain before the first
+failure (CALVIN's official metric; higher is better).
+
+| seed | A: waypoint | C: spline (base) | C + interval retiming | C + uniform retiming |
+|---|---|---|---|---|
+| 1000 | 1.510 | 1.422 | 1.672 | 1.734 |
+| 1001 | 1.764 | 1.239 | 1.433 | 1.579 |
+| 1002 | 1.416 | 1.273 | 1.647 | 1.759 |
+| **mean ± sd** | **1.56 ± .15** | **1.31 ± .08** | **1.58 ± .11** | **1.69 ± .08** |
+
+Every arm ran the *identical* 1000 chains, so any two columns can be compared
+*paired* (chain-by-chain) — far more statistically powerful than comparing raw
+averages.
+
+### The five pairwise comparisons
+
+| comparison | pooled effect (n=3000 pairs) | t | per-seed signs | verdict |
+|---|---|---|---|---|
+| uniform retiming − C base | **+0.38 avg_len** @ 1.42× realized speed | 12.1 | +, +, + | **Strongest result in the project** — same checkpoint, decode-only flag, simultaneously more successful *and* faster |
+| uniform retiming − A waypoint | +0.127 | 3.89 | +0.22, **−0.19**, +0.34 | Matches-or-beats, not unconditional — loses on 1 of 3 seeds |
+| uniform − interval retiming | +0.107 | 3.37 | +, +, + | Granularity ladder **inverts** vs. LIBERO §13 (there, interval beat uniform) |
+| interval retiming − A waypoint | +0.021 | 0.65 | — | Statistical parity (not significant) |
+| A waypoint − C base | +0.252 | 8.28 | — | The *un-retimed* spline is clearly worse than the baseline |
+
+(An earlier single-seed version of row 2 had claimed an unconditional "beats" at
+t=3.18 — corrected once seeds 2–3 landed. §9's rules applied to our own favorite
+number.)
+
+### Why it wins — mechanism, measured
+
+At the 267 subtasks where base-C failed and retimed-C succeeded, two competing
+explanations were tested:
+
+| explanation | prediction | found |
+|---|---|---|
+| "just beats the clock" (retiming sneaks in under the 360-step budget) | recovered successes finish near the time limit | only 23% did |
+| "changes the actual behavior" (compressing hesitation avoids the failure mode) | recovered successes finish with time to spare | **77% did** |
+
+The gain is ~3/4 *behavioral* (compressing reproduced human hesitation changes the
+executed trajectory away from failure modes), only ~1/4 clock management.
+
+### Why the granularity ordering flips vs. LIBERO
+
+| | LIBERO (scripted demos) | CALVIN (human teleop demos) |
+|---|---|---|
+| best method | interval-level (selective) | uniform (blind) |
+| best θ setting | 0.7 (protect most slow intervals) | 0.5 (compress almost everything) |
+| why | no dead time in the data — selectivity protects the little genuine precision-work that exists | dead time/hesitation scattered everywhere — broad compression captures it without needing to be picky |
+
+θ=0.3 regresses on CALVIN, so this isn't "more compression is always better" —
+there's still an optimum, just a much coarser one than on LIBERO. **Unified law:
+how selective the speed knob needs to be depends on how much slack is actually in
+the data.** Time authority appreciates as data gets more realistic — and real-robot
+demos are the noisy regime.
+
+### Supporting facts, and what each rules out
+
+| fact | what it shows |
+|---|---|
+| C base loses to A waypoint (+0.252, t=8.28) | the spline faithfully reproduces its human demos' *timing*, hesitation included — a liability on noisy data, and exactly what retiming is fixing |
+| waypoint success ranges 1.42 → 1.76 across seeds (identical architecture) | CALVIN training-seed variance is large — third confirmation (after LIBERO §9/§11) that no single-seed CALVIN comparison should be trusted |
+
+### The bottom line
+
+| claim | status |
+|---|---|
+| spline representation ties the waypoint baseline on raw task success, on both benchmarks | supported, with real seed-based error bars |
+| spline exposes a decode-time control surface (speed, replanning, monitoring) waypoints structurally can't have | supported |
+| on realistic noisy data, that control surface stops costing success and starts adding it | supported — **+0.38 avg_len and 1.42× speed simultaneously, seed-robust, on the official n=1000 protocol** |
+
+## 18. Real-world plan (Xiatao's question, answered with a selection principle)
+
+The §17 mechanism gives a *task filter* for hardware experiments, not just a wish:
+
+- **Compressible slowness** (careful/hesitant teleop, quasi-static tasks) → retiming
+  converts dead time to speed at zero or negative cost. Cloth folding (Xiatao's
+  suggestion) is exactly this regime — slow *because demonstrators must be careful*.
+- **Dynamics-limited slowness** (pouring, pushing, throwing) → NOT compressible;
+  speed changes the physics. Retiming preserves path geometry and is only valid
+  quasi-statically. This boundary goes in the paper.
+- **Zero-hardware first step**: run our dead-time census offline on public teleop
+  datasets (DROID, ALOHA) and *predict* which tasks benefit before touching a robot.
+
+Proposed experiments, ranked: P1 cloth folding (predicted CALVIN-regime win), P2
+kitting throughput (T̂-gated selective speedup, items/hour), P3 precision insertion
+(ease-out + velocity chaining measured as contact force/vibration on an
+impedance-controlled arm — the claim sim absorbs). Full details:
+`docs/REAL_WORLD_PLAN.md`.
+
+## 19. Updated code / docs map (post-reorganization)
+
+The repo was reorganized (July 12) from the old `libero/` layout into:
+
+| location | contents |
+|---|---|
+| `policy/smolvla_spline/` | the head + all baselines (interp/tempo/dsel/speedaug) — source of truth, mirrored to the cluster |
+| `scripts/data/` | dataset IO + stats generation (LIBERO + CALVIN) |
+| `scripts/analysis/` | every offline study (fit variants, v3 refutation, contact diagnosis, stagnation probe...) |
+| `scripts/eval/` | CALVIN two-process evaluator (`calvin_policy_server.py`, `calvin_eval_client.py`, replay gate) |
+| `scripts/figures/` | paper figures incl. `fig_calvin` (+ pooled data JSONs in `data/`) |
+| `cluster/` | all sbatch files (`eval_calvin.sbatch <ckpt> [n] [tag] [offset] [total]` shards the official eval) |
+| `docs/METHOD.md` | the deep technical spec: target construction, decode surface, 7 design laws, cluster ops |
+| `docs/RESULTS.md` | living numbers digest (§7 = CALVIN) |
+| `docs/REAL_WORLD_PLAN.md` | §18 in full |
+| `legacy/calvin_prototype/` | Quinten's original scripts, kept as format reference |
