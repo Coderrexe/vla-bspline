@@ -607,6 +607,56 @@ Reads:
    0.024); the spline fit sits below that floor — built-in denoising is the
    representation-level argument the offline gate established.
 
+## 8. Granular language + language-commanded time (Xiatao T2, July 19)
+
+Molmo-2 labels on the head's own event segments (5,028 segments, quality
+audited: correct color/object grounding — "blue can" for alphabet soup,
+"brown bottle" for tomato sauce; 10.7% consecutive-duplicate rate is the one
+artifact of frame-based labeling). Three trained arms on the derived datasets:
+
+| arm | conditioning | standard object eval |
+|---|---|---|
+| Clang (granular-only) | labels replace task strings | 34 (specialized — original prompts OOD) |
+| ClangMix (p=.5 mixed) | labels OR original per segment | **88** (twin band 89–94) |
+| ClangAdv (mixed + adverbs) | + truthful speed adverbs from demo kinematics | **87** |
+
+**Language-commanded speed (the novel capability).** Paired probe, same
+observation under three prompts (final n=128; control run at n=32):
+
+| prompt | decoded speed vs plain | control (Cn8, never saw adverbs) |
+|---|---|---|
+| "quickly …" | **+8.4%** | −0.02 (flat) |
+| "slowly and carefully …" | **−10.1%** | −0.02 (flat) |
+| slow−quick spread | **−0.093, t = −7.98 (n=128)** | +0.002, t = 0.12 |
+
+T̂ is flat in both arms — correct, since adverbs were speed-terciled, not
+length-terciled: **the adverb steers the speed profile through control-point
+spacing while duration prediction stays intact** — the shape/timing
+factorization under language control. A fixed-time waypoint head has no
+continuous profile to modulate; this behavior is inexpressible there. Labeling
+cost: zero (adverbs auto-derived from each segment's true speed tercile).
+Composes with decode-time retiming (language sets pace; decode adjusts).
+
+**Object-clause steering: does NOT transfer (grasp-choice probe, discrete).**
+Two-object scene, "move toward the {soup|cheese}" — control grasps its
+habitual object 10/10 regardless of command; ClangAdv likewise (0/10 followed
+"cheese"). Mechanism: in demonstrations the next-approached object is fully
+determined by visual scene state, so object words are REDUNDANT with vision
+and the model ignores them; speed adverbs steered precisely because the same
+visual context occurred with both fast and slow continuations
+(non-redundant). **Law: language conditioning is learned exactly where
+language carries information vision does not.** Prescription for real-world
+granular steering: counterfactually paired collection (same scene, different
+commanded target) — an interventional data-design requirement, not an
+architecture change.
+
+Probe-design lessons recorded: (i) the first adverb probe read T̂ (null) —
+wrong channel for a speed-conditioned signal; the fix added a same-prompt
+repeat noise floor and the decoded-speed readout; (ii) trajectory-divergence
+steering metrics are uninterpretable (generic language sensitivity) — use
+discrete outcomes (grasp choice) or channel-specific readouts (decoded
+speed).
+
 ## 5. Reproducibility
 - Code: `lerobot/policies/smolvla_spline/` (+ factory & env `control_freq` patches), deployed on Misha & Bouchet.
 - Train: `--policy.type=smolvla_spline [--policy.predict_duration=true]` on `HuggingFaceVLA/libero`; 100k steps ≈ 4–7h on 1 GPU.

@@ -633,3 +633,109 @@ The repo was reorganized (July 12) from the old `libero/` layout into:
 | `docs/RESULTS.md` | living numbers digest (§7 = CALVIN) |
 | `docs/REAL_WORLD_PLAN.md` | §18 in full |
 | `legacy/calvin_prototype/` | Quinten's original scripts, kept as format reference |
+
+---
+---
+
+# Part III — July 17–19 (the three-benchmark completion + language program)
+
+## 20. Slow-down: the mirror knob (Xiatao's request, mapped everywhere)
+
+New decode flags let the head *dilate* time as well as compress it — per chunk
+(`slowdown_alpha` on short-T̂ chunks) or per interval (`profile_slow_alpha` on
+the slowest fraction), composable with compression ("bidirectional"). Verdict
+across benchmarks: **free on scripted LIBERO** (obj/spa/goal 95/81/85 vs base
+94/81/84 — enable it for nothing), **harmful on noisy CALVIN** (1.22 vs base
+1.36–1.42, a pre-registered prediction: dilation amplifies exactly the dead
+time compression removes), and never better than compression-alone. The CALVIN
+speed dose-response is now monotone through the whole α range — slower is
+strictly worse, faster is strictly better, on human-teleop data. Slow-down's
+positive claim (contact force, tracking) belongs to hardware; sim establishes
+it costs nothing.
+
+## 21. RoboCasa — benchmark #3, ported end to end in ~36 hours
+
+Same playbook as CALVIN, new obstacles, all documented: the dataset shipped an
+EMPTY stats.json (computed ourselves); the action space is 12-D (base 0–3 +
+mode 4 + EE pose 5–10 + gripper 11) — handled by a new `action_layout`
+config ("robocasa12") that fits passthrough channels as their own curves while
+keeping LIBERO/CALVIN targets bit-identical (self-tested to 2e-7); training
+loss exploded (33) twice — first from stats computed on episode-contiguous
+segments instead of dataloader-style windows, then from the passthrough
+base-motion channels being near-constant on fixed-base episodes but active on
+mobile ones (rare 100σ outliers under global normalization → winsorize ±5σ);
+the eval env needed an 8-rung dependency ladder (robosuite master + pinned
+mujoco/numpy + full asset set + the aigen object registry). Validation: the
+OFFICIAL smolvla_robocasa reference model scores 4% on microwave — identical
+floor to ours, so the setup is sound and the floors are benchmark difficulty.
+
+**5-task grid (n=50/cell, 100k, all arms):** kettle A52/C34/Cuni34 | toaster
+A20/C16/Cuni16 | faucet A14/C14/Cuni6 | microwave A2/C4/Cuni2 | coffee 0/0/0.
+Parity within CIs except kettle; retiming free on 4/5 tasks. RoboCasa's offline
+gate chose n8/h24 — the SAME config as LIBERO — with a 2× stronger duration
+signal than CALVIN (logT σ 0.31): human demos with real timing variance.
+
+## 22. The language program (Xiatao T2) — from labels to laws
+
+**Labeling**: Molmo-2 captions each of the head's own event segments (the
+chunks ARE the semantic units — no other VLA has event-aligned chunks to
+address). 5,028 segments labeled; quality verified three ways — the flagged
+"hallucinations" turned out to be correct color grounding ("blue can" for
+alphabet soup, "brown bottle" for tomato sauce). One artifact of frame-based
+labeling (10.7% consecutive duplicates) would be fixed by Molmo-2's video
+pathway (deferred as polish).
+
+**Conditioning design matters more than labels**: granular-only training
+specialized catastrophically (34% under original prompts — they became
+out-of-distribution); mixing (p=.5 keep-original per segment) restored 88%
+while retaining the granular vocabulary. One training run each.
+
+**The novel capability — language-commanded speed.** Each label gets a
+truthful adverb from its segment's real speed tercile (zero labeling cost).
+Result: "quickly …" **+8.4%** decoded speed, "slowly and carefully …"
+**−10.1%**, spread t = −7.98 at n=128 paired; the control policy (never saw
+adverbs) is perfectly flat; T̂ stays constant — the adverb steers the speed
+profile through control-point spacing while duration prediction is untouched
+(the shape/timing factorization under language control). A fixed-time head has
+no continuous profile to modulate: this behavior is inexpressible there.
+
+**The honest negative with a law.** Object-clause steering ("move toward the
+cheese") does NOT work — the control grasps its habitual object 10/10
+regardless of command, and so does the language arm. Mechanism: in
+demonstrations the next-approached object is fully determined by the visual
+scene, so object words are REDUNDANT with vision and the model ignores them;
+adverbs steered precisely because the same scene occurred with fast and slow
+continuations. **Law: language conditioning is learned exactly where language
+carries information vision does not.** Prescription for real-world granular
+steering: counterfactually paired data collection (same scene, different
+commanded target) — a data-design requirement, not an architecture change.
+
+## 23. Statistics (Xiatao T3) — the TRI protocol, implemented
+
+`scripts/analysis/paper_stats.py` runs the article's full prescription over
+our actual results: Barnard's exact test for unpaired batch contrasts,
+Bonferroni correction within each table, Compact Letter Display, beta-posterior
+94% intervals, and exact paired McNemar + paired t where per-episode pairing
+exists (CALVIN's identical official chains). Output: `docs/STATS_TABLES.md`.
+Highlights: CALVIN retiming effects at p ≈ 1e-20–1e-24; LIBERO main table =
+clean three-way parity (all arms lettered "a"); C-lang table separates
+granular-only ("b") from everything else ("a"); the uniform-vs-waypoint claim
+located precisely (significant on solved-count, parity on first-task rate —
+the gains live deep in chains). Batch tests were run once on pre-committed
+sample sizes; sequential testing (STEP) is reserved for the hardware phase.
+
+## 24. Scoreboard against the field
+
+| comparison | verdict |
+|---|---|
+| waypoint SmolVLA (A) | parity on all 3 main tables (seeded, exact tests) + the capability set; on CALVIN the retimed arm beats A's best config while 1.42× faster |
+| BSP paper (arXiv 2607.09648) | validates the B-spline representation; their speedup = one human global factor (our ladder's bottom rung), no learned duration/events/selectivity/language-time; their 4×→0/20 failure is our machinery's purpose |
+| speed-as-input (TempoVLA-style) | saturates and collapses (43% @ realized 1.43× where ours holds 88%), retraining required |
+| data-level retiming (dsel) | safe but fixed at training time, no runtime knob |
+
+The paper's thesis, evidenced: **time-allocated B-spline heads give VLAs base
+functionalities prior VLAs cannot express** — decode-time speed control that
+*improves* success on realistic data, event-scheduled replanning at a fraction
+of the compute, language-commanded pace, rate adaptation, and a set of
+transferable design laws (data-regime inversion, redundancy law, protocol
+variance) that generalize beyond this head.
