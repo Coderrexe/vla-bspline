@@ -98,8 +98,12 @@ def main():
           "(0 = constant/no signal)")
 
     stats = {
+        "stats_contract_version": 1,
         "version": 2, "n_ctrl": N_CTRL, "degree": DEGREE,
         "min_seg": MIN_SEG, "h_max": H_MAX, "pause_frac": PAUSE_FRAC,
+        "action_layout": "eef7", "pose_dims": list(range(6)),
+        "grip_idx": 6, "pass_dims": [],
+        "boundary_semantics": "production_event_index_k_exclusive",
         "pose_ctrl_mean": ctrl_all.mean(0).tolist(),
         "pose_ctrl_std": np.maximum(ctrl_all.std(0), 1e-4).tolist(),
         "grip_ctrl_mean": grip_all.mean(0).tolist(),

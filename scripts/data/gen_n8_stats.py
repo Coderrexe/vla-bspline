@@ -49,6 +49,9 @@ def main():
             grip_all.append(PINV_GRIP @ w[:, 6])
     ctrl_all = np.stack(ctrl_all); grip_all = np.stack(grip_all)
     out = {
+        "stats_contract_version": 1, "action_layout": "eef7",
+        "pose_dims": list(range(6)), "grip_idx": 6, "pass_dims": [],
+        "boundary_semantics": "fixed_horizon_actions_0_to_h_minus_1",
         "n_ctrl": N_CTRL, "horizon": H, "degree": DEGREE,
         "pose_ctrl_mean": ctrl_all.mean(0).tolist(),
         "pose_ctrl_std": np.maximum(ctrl_all.std(0), 1e-4).tolist(),

@@ -3,6 +3,20 @@
 *Goal set by Simba: finish every experiment, tighten every shaky result, exceptional
 & honest results by morning. This is the consolidated, honest account.*
 
+> **⚠️ CORRECTIONS (later, 22 July — two results below were subsequently overturned by
+> matched-budget / bug-fix discipline; the current source of truth is `paper/results.md`
+> and `docs/TEAM_UPDATE.md`):**
+> 1. **Density fix REFUTED at matched 100k.** The "density fix works" claim below
+>    (§1, C_n10 36 > B 26 at 50k) did **not** survive retraining to matched 100k:
+>    C_n10 22 ≈ C 21, both < B 30. The RoboCasa time-allocation gap is a **genuine,
+>    un-fixed limitation**; candidate next fix is event-boundary construction, not density.
+> 2. **Frequency experiment DONE, not deferred.** The "deferred" note (§Deferred below)
+>    is stale — the experiment was completed with a **clean offline proof** of
+>    rate-agnosticism (1×/2× identical trajectory, jerk 0.040→0.0055; up-is-free,
+>    down-needs-feasibility-stretch) plus a supporting closed-loop sim sweep. Three
+>    harness bugs (budget timeout / env-horizon crash / stochastic-token comparison)
+>    were found and fixed en route.
+
 ## Headline: the two flagged weaknesses are both addressed
 
 ### 1. RoboCasa "our time-allocation head (C) is worse than plain B-spline (B)" → ADDRESSED

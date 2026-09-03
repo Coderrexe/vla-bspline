@@ -35,6 +35,11 @@ class SmolVLASplineConfig(SmolVLAConfig):
     pause_frac: float = 0.15          # v2: pause event = speed < frac * window median
     exec_rate_ratio: float = 1.0      # v2 decode: exec control rate / training rate
     spline_stats_file_v2: str = "spline_stats_libero_v2.json"
+    # Exact validated normalization payload. This is populated from the source
+    # JSON on first construction and serialized into config.json, making saved
+    # checkpoints independent of mutable package-level stats files. Legacy
+    # configs leave it None and retain the historical JSON fallback.
+    embedded_spline_stats: dict | None = None
 
     # Feasibility-aware time stretching (decode-time, works for v1 and v2):
     # if the decoded per-step deltas exceed the actuator bound, stretch the

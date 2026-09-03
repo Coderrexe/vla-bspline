@@ -8,7 +8,9 @@ including the optional contact-weighted (end-weighted) LSQ fit.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+from pathlib import Path
 
 import numpy as np
 
@@ -20,6 +22,37 @@ PAUSE_FRAC = 0.15
 STRIDE = 5
 
 
+def selected_episode_indices(
+    provenance_path: str | None, available: np.ndarray
+) -> tuple[np.ndarray, dict[str, object]]:
+    available = np.asarray(available, dtype=np.int64)
+    if provenance_path is None:
+        return available, {"kind": "all_dataset_episodes", "count": int(len(available))}
+    path = Path(provenance_path).expanduser().resolve()
+    payload = json.loads(path.read_text())
+    annotations = payload.get("annotations")
+    if not isinstance(annotations, list) or not annotations:
+        raise ValueError("episode provenance must contain nonempty annotations")
+    selected = np.asarray(
+        sorted(int(annotation["episode_index"]) for annotation in annotations),
+        dtype=np.int64,
+    )
+    if len(np.unique(selected)) != len(selected):
+        raise ValueError("episode provenance contains duplicate episode indices")
+    missing = sorted(set(selected.tolist()) - set(available.tolist()))
+    if missing:
+        raise ValueError(f"selected episodes are absent from the dataset: {missing}")
+    with path.open("rb") as stream:
+        provenance_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
+    return selected, {
+        "kind": "provenance_annotations",
+        "path": str(path),
+        "sha256": provenance_sha256,
+        "count": int(len(selected)),
+        "episode_indices": selected.tolist(),
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n_ctrl", type=int, required=True)
@@ -28,6 +61,10 @@ def main():
     ap.add_argument("--w_end", type=float, default=None)
     ap.add_argument("--out", required=True)
     ap.add_argument("--max_eps", type=int, default=100_000)
+    ap.add_argument(
+        "--episodes_from_provenance",
+        help="restrict normalization statistics to annotation episode_index values",
+    )
     args = ap.parse_args()
     N, LO, HM = args.n_ctrl, args.min_seg, args.h_max
 
@@ -56,7 +93,12 @@ def main():
         return min(HM, len(window))
 
     ctrl_all, grip_all, logT_all = [], [], []
-    for ep in episode_indices()[: args.max_eps]:
+    selected, selection = selected_episode_indices(
+        args.episodes_from_provenance, episode_indices()
+    )
+    selected = selected[: args.max_eps]
+    selection["used_count"] = int(len(selected))
+    for ep in selected:
         _, _, action = episode_arrays(int(ep))
         L = len(action)
         for t in range(0, L - LO, STRIDE):
@@ -75,8 +117,12 @@ def main():
 
     ctrl_all = np.stack(ctrl_all); grip_all = np.stack(grip_all); logT_all = np.array(logT_all)
     stats = {
+        "stats_contract_version": 1,
         "version": 2, "n_ctrl": N, "degree": DEGREE,
         "min_seg": LO, "h_max": HM, "pause_frac": PAUSE_FRAC,
+        "action_layout": "eef7", "pose_dims": list(range(6)),
+        "grip_idx": 6, "pass_dims": [],
+        "boundary_semantics": "production_event_index_k_exclusive",
         "fit_end_weight": args.w_end,
         "pose_ctrl_mean": ctrl_all.mean(0).tolist(),
         "pose_ctrl_std": np.maximum(ctrl_all.std(0), 1e-4).tolist(),
@@ -84,6 +130,7 @@ def main():
         "grip_ctrl_std": np.maximum(grip_all.std(0), 1e-4).tolist(),
         "logT_mean": float(logT_all.mean()), "logT_std": float(max(logT_all.std(), 1e-4)),
         "n_anchors": len(logT_all),
+        "episode_selection": selection,
     }
     with open(args.out, "w") as f:
         json.dump(stats, f, indent=1)

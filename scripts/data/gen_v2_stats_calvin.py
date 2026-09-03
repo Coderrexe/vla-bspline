@@ -75,8 +75,12 @@ def main():
 
     ctrl_all = np.stack(ctrl_all); grip_all = np.stack(grip_all); logT_all = np.array(logT_all)
     stats = {
+        "stats_contract_version": 1,
         "version": 2, "n_ctrl": N, "degree": DEGREE,
         "min_seg": LO, "h_max": HM, "pause_frac": PAUSE_FRAC,
+        "action_layout": "eef7", "pose_dims": list(range(6)),
+        "grip_idx": 6, "pass_dims": [],
+        "boundary_semantics": "production_event_index_k_exclusive",
         "fit_end_weight": args.w_end,
         "pose_ctrl_mean": ctrl_all.mean(0).tolist(),
         "pose_ctrl_std": np.maximum(ctrl_all.std(0), 1e-4).tolist(),

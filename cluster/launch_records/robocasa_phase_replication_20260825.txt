@@ -1,0 +1,12 @@
+schema=robocasa_phase_replication_launch_v1
+training_seed=1001
+training_jobs=2333001,2333002,2333003,2333004
+evaluation_seed_start=1050
+evaluation_seed_stop_exclusive=1070
+evaluation_jobs=2333005,2333006,2333007,2333008
+analysis_snapshot=/gpfs/radev/home/zs442/scratch/vla_bspline/code_snapshots/robocasa_phase_replication_analysis_20260825_v2
+analysis_job=2347716
+analysis_dependency=afterok:2333005:2333006:2333007:2333008
+nice=10000
+qos=normal
+excluded_node=r817u29n05

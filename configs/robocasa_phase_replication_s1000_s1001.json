@@ -1,0 +1,18 @@
+{
+  "schema": "robocasa_phase_replication_inputs_v1",
+  "root_hint": "$HOME/scratch/vla_bspline/outputs",
+  "shards": [
+    {"training_seed": 1000, "task": "KettleBoiling", "treatment": "original", "seed_start": 1000, "seed_stop": 1010, "path": "robocasa_official_kettle_eval_v15/kettleA40_original30_kettle_official_fixed_target_s1000_n10_2327930.json"},
+    {"training_seed": 1000, "task": "KettleBoiling", "treatment": "original", "seed_start": 1010, "seed_stop": 1050, "path": "robocasa_official_kettle_eval_v15/confirmK_original_s1000_kettle_official_fixed_target_s1010_n40_2332999.json"},
+    {"training_seed": 1000, "task": "KettleBoiling", "treatment": "official", "seed_start": 1000, "seed_stop": 1010, "path": "robocasa_official_kettle_eval_v15/kettleA40_official30_kettle_official_fixed_target_s1000_n10_2327934.json"},
+    {"training_seed": 1000, "task": "KettleBoiling", "treatment": "official", "seed_start": 1010, "seed_stop": 1050, "path": "robocasa_official_kettle_eval_v15/confirmK_official_s1000_kettle_official_fixed_target_s1010_n40_2333000.json"},
+    {"training_seed": 1000, "task": "RinseSinkBasin", "treatment": "original", "seed_start": 1000, "seed_stop": 1010, "path": "robocasa_official_rinse_eval_v14/officialR_original_rinse_official_fixed_target_s1000_n10_2327787.json"},
+    {"training_seed": 1000, "task": "RinseSinkBasin", "treatment": "original", "seed_start": 1010, "seed_stop": 1050, "path": "robocasa_official_rinse_eval_v14/confirmR_original_s1000_rinse_official_fixed_target_s1010_n40_2332997.json"},
+    {"training_seed": 1000, "task": "RinseSinkBasin", "treatment": "official", "seed_start": 1000, "seed_stop": 1010, "path": "robocasa_official_rinse_eval_v14/officialR_official_rinse_official_fixed_target_s1000_n10_2327788.json"},
+    {"training_seed": 1000, "task": "RinseSinkBasin", "treatment": "official", "seed_start": 1010, "seed_stop": 1050, "path": "robocasa_official_rinse_eval_v14/confirmR_official_s1000_rinse_official_fixed_target_s1010_n40_2332998.json"},
+    {"training_seed": 1001, "task": "KettleBoiling", "treatment": "original", "seed_start": 1050, "seed_stop": 1070, "path": "robocasa_official_kettle_eval_v15/replicateK_original_s1001_kettle_official_fixed_target_s1050_n20_2333007.json"},
+    {"training_seed": 1001, "task": "KettleBoiling", "treatment": "official", "seed_start": 1050, "seed_stop": 1070, "path": "robocasa_official_kettle_eval_v15/replicateK_official_s1001_kettle_official_fixed_target_s1050_n20_2333008.json"},
+    {"training_seed": 1001, "task": "RinseSinkBasin", "treatment": "original", "seed_start": 1050, "seed_stop": 1070, "path": "robocasa_official_rinse_eval_v14/replicateR_original_s1001_rinse_official_fixed_target_s1050_n20_2333005.json"},
+    {"training_seed": 1001, "task": "RinseSinkBasin", "treatment": "official", "seed_start": 1050, "seed_stop": 1070, "path": "robocasa_official_rinse_eval_v14/replicateR_official_s1001_rinse_official_fixed_target_s1050_n20_2333006.json"}
+  ]
+}

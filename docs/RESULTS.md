@@ -607,6 +607,47 @@ Reads:
    0.024); the spline fit sits below that floor — built-in denoising is the
    representation-level argument the offline gate established.
 
+## 7b. The cross-benchmark inconsistency, explained (July 20)
+
+Why does the same head behave differently per benchmark? Two measurable
+data properties predict everything (200 episodes + 1,200 decode windows per
+benchmark; converted RoboCasa data verified kinematically clean — 0 NaNs,
+0.01% spikes — refuting the data-corruption hypothesis):
+
+| property | LIBERO | CALVIN | RoboCasa |
+|---|---|---|---|
+| demo dead time (compressible) | ~0% | high | high (pauses 16–20%) |
+| demo steps at the ±1 action bound | 0.0% | 3.4% | **12.0%** |
+| base-decode steps clipped | 0.01% | 0.22% | **1.24%** |
+| α=0.6-decode steps clipped | 5.5% | 2.1% | 6.3% |
+| observed retiming effect | mild cost | **pure win** | mixed |
+
+**The two-factor law: dead time sets retiming's benefit; bound saturation
+sets its cost.** CALVIN (dead time, no saturation) → retiming is a pure win.
+LIBERO (neither) → mild trade. RoboCasa (both) → mixed, AND the un-retimed
+spline trails the waypoint there because spline-fit overshoot near saturated
+segments clips at base speed (1.24% of steps — 100× LIBERO), each clip
+irreversibly shortening the executed path.
+
+**Video evidence** (frame strips, read directly): kettle and faucet failures
+show correct approach followed by terminal-engagement undershoot — the arm
+reaches the lever/handle, never trips it, then retreats/drifts. The clip
+signature, not task confusion.
+
+**Intervention test (July 20): the clamp-CAUSAL version of this hypothesis is
+REFUTED.** `feasibility_stretch` (dilate instead of clip) recovered nothing:
+kettle C 32 with stretch vs 34 without (A: 52); faucet uni06 2 with stretch
+vs 6 without (base 14). Revised mechanism, properly scoped: bound saturation
+is a *marker* of RoboCasa's hard regime — fast precise engagement motions
+(lever press, handle twist) — not the causal channel. Those motions are
+intrinsically hostile to fit-smoothing (explains C < A at base) and to ANY
+timing perturbation (explains retiming and stretch both hurting). The
+deployment diagnostic survives in weakened form: high demo-saturation flags
+tasks where sharp engagement motions dominate and retiming should be used
+cautiously; it does not mean clipping itself is the harm. Video evidence
+(correct approach, terminal-engagement undershoot) remains the behavioral
+signature of the failure mode.
+
 ## 8. Granular language + language-commanded time (Xiatao T2, July 19)
 
 Molmo-2 labels on the head's own event segments (5,028 segments, quality

@@ -138,20 +138,31 @@ yields coarse cap-chunk supervision and C trails, while B — fixed-length chunk
 event machinery — does not pay that cost. All 5 tasks are now n=100 for A/B/C;
 official `lerobot/smolvla_robocasa` also floors on microwave (genuine difficulty).
 
-**Honest read — RoboCasa is our hardest benchmark, but now with a clean causal story
-and a fix under test:**
+**Honest read — RoboCasa is our hardest benchmark, with a clean causal story and a
+genuine, un-fixed weak spot:**
 
 0. **Representation ≈ free, time-allocation is the cost** (B≈A > C), and the cost
-   tracks cap-domination / low event-fraction (§3 diagnostic). **The density fix
-   WORKS (matched-50k ablation, n=100):** on toaster (the cap-dominated task) raising
-   control points 8→10 gives **C_n10 36% vs C 23% vs B 26%** — C_n10 recovers +13 pts
-   over C *and exceeds B*, confirming the coarse-cap-chunk mechanism (the same
-   capacity law as LIBERO long-horizon). On faucet all arms floor at 7–11%
-   (precision-limited, density-independent — a *shared* difficulty, not a C-specific
-   deficit). **So the "our time-allocation head < plain B-spline" concern is
-   addressed where it was real: with adequate density C_n10 beats B; the residual is
-   shared task difficulty.** (Matched-100k confirmation eval pending; single-variable
-   n8→n10, same segmentation.)
+   tracks cap-domination / low event-fraction (§3 diagnostic). **The density fix does
+   NOT survive matched full budget (honest negative).** A 50k ablation *looked* like a
+   fix (C_n10 36 > B 26 > C 23 on toaster), but retrained to matched **100k** the
+   effect evaporates:
+
+   | arm @100k | toaster | faucet |
+   |---|---|---|
+   | C (n8) | 21 | 6 |
+   | C_n10 (denser) | 22 | 8 |
+   | **B** | **30** | 9 |
+
+   At matched budget **C_n10 (22) ≈ C (21), both < B (30)** — the 50k signal was a
+   favorable/undertrained draw (B rose 26→30 with training while C_n10 *fell* 36→22).
+   So control-point density is **not** a reliable fix here. **The "our time-allocation
+   head < plain B-spline on cap-dominated tasks" concern stands as a real, open
+   limitation** — we understand the mechanism (coarse cap-chunk supervision, §3
+   event-fraction diagnostic) but do not yet have a fix that holds at full budget.
+   Candidate next intervention: **event-boundary construction** (add supervision
+   boundaries inside long cap-chunks), not raw density. (This is our second
+   premature-50k over-optimism, caught by matched-budget discipline; cf. the CALVIN
+   language n=30→n=240 regression.)
 1. **C trails A by ~5.6 pts (3-task) / 3.0 pts (5-task) at n=100** (driven by toaster
    32 vs 21 and faucet 15 vs 6; kettle is C≈A). This is a real gap, unlike LIBERO (parity) and CALVIN
    (where retiming *recovers* the gap). An earlier "3-way parity" read was based on
@@ -192,20 +203,29 @@ and a fix under test:**
    shows the strongest contact deceleration at toggles — demo speed drops to 0.40×
    cruise — i.e. high precision-sensitivity γ, consistent with it being the hardest
    of the three.)
-6. **Causal tests, in flight / gated (not overclaiming n=3 correlation).** The B arm
-   (fixed-time spline, training now, job 2141953) splits representation-cost from
-   time-allocation-cost: if B also trails A, it's the spline representation on
-   cap-dominated tasks; if B ties A and only C trails, it's the event-chunking +
-   duration head paying a cost without the event-alignment benefit. **Then one
-   targeted ablation** — raise control-point density (the LIBERO-proven fix for
-   cap-chunk coarseness) or lower the cap / add event boundaries — is the direct
-   intervention. No broad sweep until B + this diagnostic name the failure mode.
+6. **Causal tests — DONE; both candidate fixes eliminated, limitation characterized.**
+   The B arm (fixed-time spline) split representation-cost from time-allocation-cost:
+   B ties A and only C trails → the cost is the **event-chunking + duration head**, not
+   the spline representation. We then ran **both** targeted interventions Xiatao named:
+   (a) **control-point density** (n8→n10) — **refuted at matched 100k** (C_n10 22 ≈ C 21
+   < B 30; the 50k "fix" was undertrained); (b) **event-boundary construction** — ruled
+   out by an offline necessary-condition gate: on toaster/faucet the transports are
+   event-sparse (~3 motion events/ep; even including them, ~80% of chunks are still
+   featureless caps), and forcing cap-fraction lower needs a detector so aggressive it
+   just chops monotonic motion into shorter windows = re-deriving fixed-time B. **So
+   neither fix cleanly closes the gap** — and the convergent read is a **law, not a
+   loose end: the time-allocation head's benefit is gated by intrinsic event density**
+   (a property of the task/data). Kettle (event-rich ≈ CALVIN) → C ties A; toaster/faucet
+   (event-sparse teleop transports) → duration head has no informative signal → C trails.
+   This is the *same* event-density axis that governs the CALVIN win — RoboCasa just sits
+   at its unfavorable end.
 
 Full cross-benchmark completion (interval-retiming + self-paced on RoboCasa at
 n=100) is done — all C variants cluster at 20–22 mean, all trailing A's 27.3;
 retiming/replanning are neutral among them (within n=100 noise). RoboCasa's
-final status: **our weakest benchmark — a genuine base-representation gap on
-human-teleop data, with the retiming capability neither helping nor breaking.**
+final status: **our weakest benchmark — a real, now-*characterized* limitation
+(event-density-gated time-allocation) on human-teleop data, with the retiming
+capability neither helping nor breaking.**
 
 ---
 
@@ -257,8 +277,9 @@ it is honestly our weakest benchmark.
 | **Data-regime law** | scripted → protect slow intervals (fine gating best); noisy human → compress all but the slowest tail (coarse best); seeded inversion t=3.4 | human demos carry compressible dead time (77% of the CALVIN gain is behavioral — removing reproduced hesitation — not clock management) |
 | **Slow-down** (mirror knob) | free on LIBERO (95/81/85 vs base 94/81/84); **hurts on CALVIN (1.22 vs 1.36–1.42) — pre-registered prediction confirmed** | dilation amplifies exactly the dead time retiming removes; positive claim deferred to hardware (contact force) |
 | **Event-scheduled replanning** | LIBERO: matched success @ **2.7× fewer policy calls** (margin law: replan at T̂−4, causal dose-response); CALVIN: matched success (−0.03 ± 0.03, ns, n=3000 paired × 3 seeds) @ **2.1× fewer inferences** (14.2 vs ~30/chain) | replan just *before* the predicted motion end, never at it |
-| **Language-commanded speed** *(δ-gated, learned; steers speed at preserved success)* | Faithful counterfactual (clause fixed, swap only the adverb, vs a **neutral-prefix** baseline). **LIBERO** (scripted, δ≈0): slow-down learned (ClangAdv "slowly" −13.5% vs clause-matched ClangMix −2.4%); "quickly" capped (no dead-time). **CALVIN** (teleop, δ high): offline decoded-speed quick +11%/slow −12% vs neutral (t=6–7). **Closed-loop rollout (n=100 @40k) confirms bidirectional speed control: "quickly" realized speed +19%, "slowly" −17%, monotonic, neutral≈plain.** The quick direction works on CALVIN but is capped on LIBERO — the (δ,h,γ) prediction. | kinematic adverbs (zero labeling) steer control-point spacing; T̂ ~flat. **Honest scope: language reliably commands executed SPEED bidirectionally at ~preserved task success; it does NOT independently *improve* success** (an apparent n=30 avg_len gain did not survive n=100 + the neutral control). The success-improvement remains the α-knob's job (compression); language is the speed *interface*. (100k-checkpoint re-run pending to finalize.) |
+| **Language-commanded speed** *(δ-gated, learned; steers speed at preserved success)* | Faithful counterfactual (clause fixed, swap only the adverb, vs a **neutral-prefix** baseline). **LIBERO** (scripted, δ≈0): slow-down learned (ClangAdv "slowly" −13.5% vs clause-matched ClangMix −2.4%); "quickly" capped (no dead-time). **CALVIN** (teleop, δ high): offline decoded-speed quick +11%/slow −12% vs neutral (t=6–7). **Closed-loop rollout (100k checkpoint, n≈240 unique seqs, neutral-controlled) confirms bidirectional speed control: "quickly" realized speed +16%, "slowly" −16%, adverb-specific (neutral ≈ plain, t=0.15).** The quick direction works on CALVIN but is capped on LIBERO — the (δ,h,γ) prediction. | kinematic adverbs (zero labeling) steer control-point spacing; T̂ ~flat. **Honest scope: language reliably commands executed SPEED bidirectionally at ~preserved task success; it does NOT independently *improve* success** — the apparent avg_len gain regressed n=30 → n=100 → n=240 and is not significant (quick +0.19 avg_len, paired t=1.66). The success-improvement remains the α-knob's job (compression, +0.38 t=12 n=3000×3); language is the speed *interface*. **Final, not pending.** |
 | **Object-clause steering** | does **not** work (trained arm follows "cheese" 0/10, same as control) — **the redundancy law**: object choice is fully determined by vision in demos, so object words carry no information and are ignored | prescribes real-world collection design: counterfactually paired data (same scene, different commanded target) |
+| **Execution-frequency adaptation** *(the stated central motivation)* | **Offline proof (rigorous):** decoding the *same* spline tokens at 0.5×/1×/2×, the 1× and 2× trajectories are **identical** (endpoint/path dev ≈ 0) and jerk falls **0.040 → 0.0055** — **deploying faster is free and strictly smoother**; a waypoint head cannot. 0.5× degrades only via actuator clamping (the h-term → feasibility-stretch). **Closed-loop sim (supporting):** at 2×, waypoint arms collapse to **0%** while **C hits 93% at the lowest jerk in the table (0.033)**; A-interp does not rescue 2× (per-step velocity, not path shape). Decisive test = hardware. | one continuous curve, resampled at any rate post-hoc (`exec_rate_ratio`); waypoints are pinned to the training Δt |
 | **Feasibility stretch** | **+19 pts at half control rate** (LIBERO, promoted config) | stretch the execution window instead of clipping infeasible per-step deltas |
 | **Endogenous failure detection** | 86% precision / 52% recall (LIBERO); scoped: needs duration-signal range — does not transfer to the compressed CALVIN h16 config (recall ≤4%, mechanism understood) | T̂ countdown stalls when the policy is stuck; a free byproduct of the duration channel |
 | **Ease-out contact landing** | terminal velocity ×0.14 with exact endpoint; executed toggle kinematics restored to demo-like (0.844 → 0.766 ≈ waypoint's 0.750) | cosine retiming of the final path steps; matters for self-paced mode and hardware |

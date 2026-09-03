@@ -22,8 +22,8 @@ libero/validate_spline_head_math.py (endpoint error exactly 0 at all rates;
 gripper toggle timing p95 = 0.26 env steps).
 """
 
-import json
 import os
+import warnings
 
 import torch
 from torch import Tensor
@@ -32,44 +32,13 @@ from lerobot.utils.constants import ACTION, OBS_LANGUAGE_ATTENTION_MASK, OBS_LAN
 
 from ..smolvla.modeling_smolvla import SmolVLAPolicy, pad_vector
 from .configuration_smolvla_spline import SmolVLASplineConfig
-
-
-def bspline_basis(u: Tensor, n_ctrl: int, degree: int = 3) -> Tensor:
-    """(len(u), n_ctrl) cubic B-spline basis on clamped uniform knots over [0,1].
-
-    Cox–de Boor recursion in float64. u must lie in [0, 1].
-    """
-    device = u.device
-    dt = torch.float64
-    u = u.to(dt).clamp(0.0, 1.0)
-    kn = torch.cat(
-        [
-            torch.zeros(degree, dtype=dt, device=device),
-            torch.linspace(0, 1, n_ctrl - degree + 1, dtype=dt, device=device),
-            torch.ones(degree, dtype=dt, device=device),
-        ]
-    )
-    m = len(kn) - 1
-    # degree 0: indicator of the knot span; last span right-closed so u=1 is covered
-    N = torch.zeros(len(u), m, dtype=dt, device=device)
-    for j in range(m):
-        left, right = kn[j], kn[j + 1]
-        if right > left:
-            covered = (u >= left) & ((u < right) | ((right >= 1.0) & (u <= 1.0)))
-            N[:, j] = covered.to(dt)
-    for d in range(1, degree + 1):
-        N_new = torch.zeros(len(u), m - d, dtype=dt, device=device)
-        for j in range(m - d):
-            den1 = (kn[j + d] - kn[j]).item()
-            den2 = (kn[j + d + 1] - kn[j + 1]).item()
-            term = torch.zeros(len(u), dtype=dt, device=device)
-            if den1 > 0:
-                term = term + (u - kn[j]) / den1 * N[:, j]
-            if den2 > 0:
-                term = term + (kn[j + d + 1] - u) / den2 * N[:, j + 1]
-            N_new[:, j] = term
-        N = N_new
-    return N  # float64 (len(u), n_ctrl)
+from .event_targets import (
+    bspline_basis,
+    build_event_spline_targets,
+    first_event_indices,
+    make_event_operator_banks,
+)
+from .stats_contract import consume_legacy_normalization_missing_keys, resolve_spline_stats
 
 
 class SmolVLASplinePolicy(SmolVLAPolicy):
@@ -116,44 +85,28 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             self.register_buffer("_pinv_mid", pinv_mid.float(), persistent=False)
             self.register_buffer("_b_last", B_path[:, n - 1 : n].float(), persistent=False)
             self.register_buffer("_pinv_grip", pinv_grip.float(), persistent=False)
-            stats_name, expect_len = cfg.spline_stats_file, H
         else:
             # ---- v2: zero-padded operator BANKS for T in [min_seg, horizon_max].
             # Padding with zeros is exact: padded columns multiply path entries
             # beyond the segment, contributing nothing.
             Hm, lo = cfg.horizon_max, cfg.min_seg
-            n_len = Hm - lo + 1
-            pm_bank = torch.zeros(n_len, n - 2, Hm + 1, dtype=torch.float64)
-            bl_bank = torch.zeros(n_len, Hm + 1, 1, dtype=torch.float64)
-            pg_bank = torch.zeros(n_len, n, Hm, dtype=torch.float64)
-            bp_bank = torch.zeros(n_len, Hm + 1, n, dtype=torch.float64)  # full basis (decode-consistency)
-            for i, T in enumerate(range(lo, Hm + 1)):
-                u_path = torch.arange(T + 1, dtype=torch.float64) / T
-                B_path = bspline_basis(u_path, n, deg)
-                if cfg.fit_end_weight is not None:
-                    # contact-weighted LSQ: weight ramps 1 -> W over the last 25%
-                    # of the (event-terminated) chunk; rank-safe via sqrt-W pinv.
-                    W = float(cfg.fit_end_weight)
-                    sw = torch.sqrt(1.0 + (W - 1.0) * ((u_path - 0.75) / 0.25).clamp(0, 1))
-                    pm = torch.linalg.pinv(sw.unsqueeze(1) * B_path[:, 1 : n - 1]) * sw.unsqueeze(0)
-                else:
-                    pm = torch.linalg.pinv(B_path[:, 1 : n - 1])
-                pm_bank[i, :, : T + 1] = pm
-                bl_bank[i, : T + 1, :] = B_path[:, n - 1 : n]
-                bp_bank[i, : T + 1, :] = B_path
-                u_grip = torch.arange(T, dtype=torch.float64) / max(T - 1, 1)
-                pg_bank[i, :, :T] = torch.linalg.pinv(bspline_basis(u_grip, n, deg))
-            self.register_buffer("_pm_bank", pm_bank.float(), persistent=False)
-            self.register_buffer("_bl_bank", bl_bank.float(), persistent=False)
-            self.register_buffer("_pg_bank", pg_bank.float(), persistent=False)
-            self.register_buffer("_bp_bank", bp_bank.float(), persistent=False)
-            stats_name, expect_len = cfg.spline_stats_file_v2, None
+            pm_bank, bl_bank, pg_bank, bp_bank = make_event_operator_banks(
+                n_ctrl=n,
+                degree=deg,
+                min_seg=lo,
+                horizon_max=Hm,
+                fit_end_weight=cfg.fit_end_weight,
+            )
+            self.register_buffer("_pm_bank", pm_bank, persistent=False)
+            self.register_buffer("_bl_bank", bl_bank, persistent=False)
+            self.register_buffer("_pg_bank", pg_bank, persistent=False)
+            self.register_buffer("_bp_bank", bp_bank, persistent=False)
 
-        stats_path = os.path.join(os.path.dirname(__file__), stats_name)
-        with open(stats_path) as f:
-            s = json.load(f)
-        if s["n_ctrl"] != n or (expect_len is not None and s.get("horizon") != expect_len):
-            raise ValueError(f"stats file {stats_name} mismatches config — regenerate")
+        # New checkpoints carry the exact validated payload in config.json and
+        # in the persistent buffers below. Fresh runs and legacy checkpoints
+        # retain a one-time source-JSON fallback.
+        self._spline_stats_were_embedded = getattr(cfg, "embedded_spline_stats", None) is not None
+        s, self._spline_stats_origin = resolve_spline_stats(cfg, os.path.dirname(__file__))
         mean = torch.zeros(n, self._N_OUT)
         std = torch.ones(n, self._N_OUT)
         mean[:, :6] = torch.tensor(s["pose_ctrl_mean"], dtype=torch.float32)
@@ -168,8 +121,67 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             if "pass_ctrl_mean" in s:
                 mean[:, 8:] = torch.tensor(s["pass_ctrl_mean"], dtype=torch.float32)
                 std[:, 8:] = torch.tensor(s["pass_ctrl_std"], dtype=torch.float32)
-        self.register_buffer("_tgt_mean", mean, persistent=False)
-        self.register_buffer("_tgt_std", std, persistent=False)
+        self.register_buffer("_tgt_mean", mean, persistent=True)
+        self.register_buffer("_tgt_std", std, persistent=True)
+
+    def _load_from_state_dict(
+        self,
+        state_dict,
+        prefix,
+        local_metadata,
+        strict,
+        missing_keys,
+        unexpected_keys,
+        error_msgs,
+    ):
+        """Load both checkpoint generations without weakening strict loading.
+
+        Pre-fix checkpoints contain neither target-stat buffer. For that exact
+        legacy case, keep the validated JSON fallback constructed above and
+        remove only those two missing keys. A partially present pair remains a
+        hard error, as do all other missing/unexpected parameters.
+        """
+
+        mean_key = prefix + "_tgt_mean"
+        std_key = prefix + "_tgt_std"
+        if (mean_key in state_dict) != (std_key in state_dict):
+            error_msgs.append(
+                "incomplete spline normalization in checkpoint: _tgt_mean and _tgt_std "
+                "must either both be present (new checkpoint) or both be absent (legacy checkpoint)"
+            )
+        if self._spline_stats_were_embedded and mean_key in state_dict and std_key in state_dict:
+            # config.json and the tensor state are deliberately redundant. If
+            # both are present they must describe one exact normalization;
+            # accepting disagreement would make load behaviour order-dependent.
+            for key, expected in (
+                (mean_key, self._tgt_mean),
+                (std_key, self._tgt_std),
+            ):
+                incoming = state_dict[key]
+                if incoming.shape == expected.shape and not torch.equal(
+                    incoming.to(device=expected.device, dtype=expected.dtype), expected
+                ):
+                    error_msgs.append(
+                        f"checkpoint normalization mismatch for {key}: persistent buffer "
+                        "does not equal config-embedded spline stats"
+                    )
+        super()._load_from_state_dict(
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
+        if consume_legacy_normalization_missing_keys(state_dict, prefix, missing_keys):
+            warnings.warn(
+                "Loading a legacy spline checkpoint without embedded normalization buffers; "
+                f"using validated stats from {self._spline_stats_origin}. Re-save the policy "
+                "once to make the checkpoint self-contained.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     # -------------------------------------------------------- v2 event chunks
     def _first_event(self, a: Tensor, pad: Tensor | None) -> Tensor:
@@ -179,24 +191,15 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
         low-speed steps) | episode end (first padded step). Else horizon_max.
         """
         cfg = self.config
-        B, Hm, _ = a.shape
-        ev = torch.zeros(B, Hm, dtype=torch.bool, device=a.device)
-        p_lo = getattr(self, "_pose_lo", 0)
-        grip = a[..., getattr(self, "_grip_idx", 6)]
-        ev[:, 1:] |= grip[:, 1:] != grip[:, :-1]                       # toggle
-        speed = a[..., p_lo : p_lo + 6].norm(dim=-1)                   # (B, Hm)
-        # quantile(0.5) interpolates like numpy.median (torch.median picks the
-        # lower-middle element, which under-thresholds half-slow windows)
-        med = torch.quantile(speed, 0.5, dim=1, keepdim=True) + 1e-9
-        low = speed < cfg.pause_frac * med
-        ev[:, 1:] |= low[:, 1:] & low[:, :-1]                          # pause
-        if pad is not None:
-            ev |= pad                                                  # episode end
-        ev[:, : cfg.min_seg] = False                                   # respect minimum
-        any_ev = ev.any(dim=1)
-        first = torch.argmax(ev.int(), dim=1)                          # 0 if none
-        T = torch.where(any_ev, first, torch.full_like(first, cfg.horizon_max))
-        return T.clamp(cfg.min_seg, cfg.horizon_max)
+        return first_event_indices(
+            a,
+            pad,
+            pose_lo=getattr(self, "_pose_lo", 0),
+            grip_idx=getattr(self, "_grip_idx", 6),
+            min_seg=cfg.min_seg,
+            horizon_max=cfg.horizon_max,
+            pause_frac=cfg.pause_frac,
+        )
 
     # ------------------------------------------- speed-heterogeneous demos
     def _speed_factors(self, batch: dict[str, Tensor], dtype, device) -> Tensor:
@@ -268,25 +271,20 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             dur = torch.zeros_like(c_grip)
         else:
             # ---- v2: event-segmented variable-length fit via padded banks ----
-            T = self._first_event(a, pad)                              # (B,)
-            idx = torch.arange(cfg.horizon_max, device=a.device)
-            seg_mask = (idx.unsqueeze(0) < T.unsqueeze(1)).to(pose.dtype)   # (B, Hm)
-            pose_seg = pose * seg_mask.unsqueeze(-1)      # zero beyond the segment
-            path = torch.cat(
-                [torch.zeros_like(pose_seg[:, :1]), torch.cumsum(pose_seg, dim=1)], dim=1
-            )                                                          # (B, Hm+1, 6)
-            bank_i = T - cfg.min_seg                                   # (B,)
-            pm = self._pm_bank[bank_i]                                 # (B, n-2, Hm+1)
-            bl = self._bl_bank[bank_i]                                 # (B, Hm+1, 1)
-            pg = self._pg_bank[bank_i]                                 # (B, n, Hm)
-            # p_end = path at index T (segment endpoint), per sample
-            p_end = path.gather(
-                1, T.view(-1, 1, 1).expand(-1, 1, path.shape[-1])
-            )                                                          # (B, 1, 6)
-            resid = path - bl * p_end                                  # (B, Hm+1, 6)
-            c_mid = torch.einsum("bmh,bhd->bmd", pm, resid)            # (B, n-2, 6)
-            c_pose = torch.cat([torch.zeros_like(p_end), c_mid, p_end], dim=1)
-            c_grip = torch.einsum("bnh,bh->bn", pg, grip)              # (B, n)
+            raw = build_event_spline_targets(
+                a,
+                pad,
+                pm_bank=self._pm_bank,
+                bl_bank=self._bl_bank,
+                pg_bank=self._pg_bank,
+                pose_lo=p_lo,
+                grip_idx=getattr(self, "_grip_idx", 6),
+                pass_dims=p_dims,
+                min_seg=cfg.min_seg,
+                horizon_max=cfg.horizon_max,
+                pause_frac=cfg.pause_frac,
+            )
+            c_pose, c_grip, c_pas, T = raw
             self._last_T_batch = T                                     # decode-consistency hook
             T_lab = T.to(pose.dtype)
             if cfg.speed_aug:
@@ -304,7 +302,9 @@ class SmolVLASplinePolicy(SmolVLAPolicy):
             if not cfg.predict_duration:
                 c_pas = torch.einsum("nh,bhk->bnk", self._pinv_grip, pas)
             else:
-                c_pas = torch.einsum("bnh,bhk->bnk", pg, pas)
+                # v2 passthrough targets are produced by the shared raw-target
+                # builder above, alongside pose, gripper, and duration.
+                assert c_pas is not None
             parts.append(c_pas)
         tgt = torch.cat(parts, dim=-1)
         tgt = (tgt - self._tgt_mean) / self._tgt_std                   # (B, n, N_OUT)
@@ -734,6 +734,7 @@ def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.s
     # -> pinned endpoint control point must be exactly p_end/s.
     class _CfgSaug(_Cfg):
         speed_aug = [1.0, 2.0]
+        embedded_spline_stats = {**_Cfg.embedded_spline_stats, "speed_aug": speed_aug}
 
     a3 = torch.zeros(2, H, 7)
     a3[..., :6] = 0.25
@@ -760,6 +761,7 @@ def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.s
     # only the duration channel scales: logT' = logT + log s.
     class _CfgV2S(_CfgV2):
         speed_aug = [1.0, 2.0]
+        embedded_spline_stats = {**_CfgV2.embedded_spline_stats, "speed_aug": speed_aug}
 
     h3 = _HolderV2()
     h3.config = _CfgV2S
@@ -783,6 +785,10 @@ def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.s
     # ---------------- contact-weighted fit: WLS exactness vs numpy ----------------
     class _CfgV2W(_CfgV2):
         fit_end_weight = 9.0
+        embedded_spline_stats = {
+            **_CfgV2.embedded_spline_stats,
+            "fit_end_weight": fit_end_weight,
+        }
 
     h4 = _HolderV2()
     h4.config = _CfgV2W
@@ -865,6 +871,15 @@ def _self_test():  # pragma: no cover — run with: python -m lerobot.policies.s
     # ---------------- robocasa12 action layout: round-trip ----------------
     class _CfgRC(_CfgV2):
         action_layout = "robocasa12"
+        embedded_spline_stats = {
+            **_CfgV2.embedded_spline_stats,
+            "action_layout": action_layout,
+            "pose_dims": [5, 6, 7, 8, 9, 10],
+            "grip_idx": 11,
+            "pass_dims": [0, 1, 2, 3, 4],
+            "pass_ctrl_mean": [[0.0] * 5 for _ in range(n)],
+            "pass_ctrl_std": [[1.0] * 5 for _ in range(n)],
+        }
 
     hrc = _HolderV2()
     hrc.config = _CfgRC

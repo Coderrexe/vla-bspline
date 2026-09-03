@@ -1,0 +1,18 @@
+schema=libero_compositional_holdout_matrix_v1
+source_snapshot=/gpfs/radev/home/zs442/scratch/vla_bspline/code_snapshots/compositional_launch_20260825_v3
+data_snapshot=/gpfs/radev/home/zs442/scratch/vla_bspline/code_snapshots/compositional_holdout_20260825_v3
+supersedes_build_job=2347668
+supersedes_matrix_jobs=2347670,2347671,2347672,2347673,2347674,2347675,2347676,2347677
+superseded_jobs_consumed_compute=false
+build_job=2347690
+robocasa_replication_eval_jobs=2333005,2333006,2333007,2333008
+cell=A,whole train_job=2347691 smoke_eval_job=2347692
+cell=A,clause train_job=2347693 smoke_eval_job=2347694
+cell=C,whole train_job=2347695 smoke_eval_job=2347696
+cell=C,clause train_job=2347697 smoke_eval_job=2347698
+nice=10000
+qos=normal
+excluded_node=r817u29n05
+seed=1000
+steps=20000
+smoke_states=2

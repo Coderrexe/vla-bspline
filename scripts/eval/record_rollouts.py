@@ -9,6 +9,10 @@ save npz. Mirrors lerobot_eval's loading + rollout recipe 1:1, without the
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+import random
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -30,6 +34,7 @@ def main():
     ap.add_argument("--max_steps", type=int, default=280)
     ap.add_argument("--control_freq", type=int, default=20)
     ap.add_argument("--seed_base", type=int, default=1000)
+    ap.add_argument("--state_start", type=int, default=0)
     ap.add_argument("--out", default="rollouts.npz")
     # T-hat-stagnation recovery: when the duration head's countdown stalls
     # (trailing-window stall_frac > threshold), back off (retreat upward a few
@@ -39,6 +44,10 @@ def main():
     ap.add_argument("--recover_window", type=int, default=80)
     ap.add_argument("--recover_cooldown", type=int, default=60)
     args = ap.parse_args()
+
+    output_path = Path(args.out)
+    if output_path.exists():
+        raise FileExistsError(f"refusing to overwrite existing rollout artifact: {output_path}")
 
     policy_cfg = PreTrainedConfig.from_pretrained(args.ckpt)
     policy_cfg.pretrained_path = args.ckpt
@@ -59,8 +68,34 @@ def main():
     env_pre, env_post = make_env_pre_post_processors(env_cfg=env_cfg, policy_cfg=policy_cfg)
 
     all_actions, all_states, all_that, ep_lens, successes, n_calls = [], [], [], [], [], []
+    realized_state_ids, realized_seeds = [], []
     for ep in range(args.episodes):
-        obs, _ = env.reset(seed=args.seed_base + ep)
+        state_id = args.state_start + ep
+        seed = args.seed_base + args.task_id * 1_000 + state_id
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+
+        # LIBERO's deployed step() resets internally on success and increments
+        # init_state_id. Reassign before every explicit reset so earlier policy
+        # outcomes cannot alter the states visited by later episodes.
+        base_envs = getattr(env, "envs", None)
+        if base_envs is None or len(base_envs) != 1:
+            raise RuntimeError("record_rollouts requires a one-environment SyncVectorEnv")
+        base_env = getattr(base_envs[0], "unwrapped", base_envs[0])
+        if base_env._init_states is None or state_id >= len(base_env._init_states):
+            available = 0 if base_env._init_states is None else len(base_env._init_states)
+            raise ValueError(
+                f"requested state {state_id}, but task exposes only {available} fixed init states; "
+                "do not wrap and pseudoreplicate states"
+            )
+        base_env.init_state_id = state_id
+        obs, _ = env.reset(seed=seed)
+        realized_state = int(base_env.init_state_id) - int(base_env._reset_stride)
+        if realized_state != state_id:
+            raise RuntimeError(f"requested init state {state_id}, realized {realized_state}")
         policy.reset()
         acts, states, that = [], [], []
         done, step, ep_success = False, 0, False
@@ -115,19 +150,46 @@ def main():
         successes.append(ep_success)
         calls = int(getattr(policy, "n_chunks_generated", -1))  # -1 = counter unsupported
         n_calls.append(calls)
+        realized_state_ids.append(realized_state)
+        realized_seeds.append(seed)
         rec = f" recoveries={n_recoveries}" if args.recover else ""
         print(f"ep {ep}: steps={step} success={ep_success} policy_calls={calls}{rec}", flush=True)
 
+    config_path = Path(args.ckpt).resolve() / "config.json"
+
+    def sha256(path):
+        digest = hashlib.sha256()
+        with Path(path).open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
+
+    manifest = {
+        "protocol": "libero_explicit_init_state_v1",
+        "checkpoint": str(Path(args.ckpt).resolve()),
+        "checkpoint_config_sha256": sha256(config_path),
+        "model_sha256": sha256(Path(args.ckpt).resolve() / "model.safetensors"),
+        "task": args.task,
+        "task_id": args.task_id,
+        "control_frequency_hz": args.control_freq,
+        "max_steps": args.max_steps,
+        "state_ids": realized_state_ids,
+        "seeds": realized_seeds,
+        "evaluator_sha256": sha256(Path(__file__).resolve()),
+    }
     np.savez(
-        args.out,
+        output_path,
         actions=np.array(all_actions, dtype=object),
         states=np.array(all_states, dtype=object),
         t_hat=np.array(all_that, dtype=object),
         ep_lens=np.array(ep_lens),
         successes=np.array(successes),
         n_policy_calls=np.array(n_calls),
+        state_ids=np.array(realized_state_ids),
+        seeds=np.array(realized_seeds),
+        manifest_json=np.array(json.dumps(manifest)),
     )
-    print("saved ->", args.out)
+    print("saved ->", output_path)
 
 
 if __name__ == "__main__":

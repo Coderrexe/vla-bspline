@@ -1,0 +1,19 @@
+{
+  "name": "libero_long_t01_train_t7_holdout_v1",
+  "targets": {
+    "0": {
+      "evaluator_task": "put both the alphabet soup and the tomato sauce in the basket",
+      "clauses": [
+        "put the alphabet soup in the basket",
+        "put the tomato sauce in the basket"
+      ]
+    },
+    "1": {
+      "evaluator_task": "put both the cream cheese box and the butter in the basket",
+      "clauses": [
+        "put the cream cheese box in the basket",
+        "put the butter in the basket"
+      ]
+    }
+  }
+}

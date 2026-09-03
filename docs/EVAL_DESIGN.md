@@ -119,3 +119,91 @@ harness with a `--task_override` flag; ~K=10 scenes × 3 prompts × 5 samples.
 Statistic: paired per-scene displacement differences, sign test + mean ± SE
 (n = K×samples); this is a *mechanism* demonstration, not a benchmark score —
 absolute steering magnitude matters less than the Clang-vs-Cn8 contrast.
+
+## 9. FINAL paper experiment matrix (July 20, per Xiatao's prioritization)
+
+### 9a. Scenario selection (his LIBERO-saturation concern, addressed)
+
+| block | what | why |
+|---|---|---|
+| **LIBERO-Hard-5** | the 5 lowest per-task cells for the WAYPOINT baseline (selection rule fixed BEFORE looking at our arms' numbers — no cherry-picking in our favor; computed from A's own 3-seed per-task data) | answers "LIBERO is saturated": we evaluate exactly where it is NOT; selection by baseline difficulty is reviewer-proof |
+
+**COMPUTED (July 21, canonical f20 battery, A = Afull/As1001/As1002_nas10 pooled
+n=30/task; C shown for context only — never consulted for selection):**
+
+| rank | cell | A (waypoint) | C (ours, base) |
+|---|---|---|---|
+| 1 | libero_10 task 0 | 33% (10/30) | 50% (20/40) |
+| 2 | libero_10 task 4 | 47% (14/30) | 28% (11/40) |
+| 3 | libero_spatial task 5 | 47% (14/30) | 32% (13/40) |
+| 4 | libero_10 task 7 | 53% (16/30) | 58% (23/40) |
+| 5 | **libero_10 task 6** (tie-break winner) | 60.0% (36/60) | 50% (20/40) |
+
+Suite-level A cross-check: object 94.7 / goal 86.0 / spatial 84.3 / 10 63.3 —
+matches the canonical battery, and confirms Xiatao's instinct: the unsaturated
+frontier is LIBERO-Long. **Rank-5 tie-break (pre-registered, then executed July
+29):** the initial ranking had a 4-way tie at 63% (19/30) among libero_10 tasks
+{5, 6, 8, 9}; protocol = add A-arm episodes only (3 canonical seeds × libero_10
++10/task, jobs 2182178/2182179/2182230 → n=60/task), lowest pooled A% wins,
+task_id breaks residual ties, C never consulted. Outcome: task 6 = 60.0%,
+task 8 = 61.7%, tasks 5 & 9 = 68.3% → **task 6 takes rank 5**. FINAL
+Hard-5 = libero_10 {0, 4, 6, 7} + libero_spatial {5}. Full per-task table:
+`~/libero_pertask.tsv` on misha. **Top-up campaign COMPLETE (July 29, 20/20
+cells, n=180–210/cell): final table + reads in paper/results.md §1b** (B≥A on
+4/5 hard cells, t0 +12.2 p=.016 uncorr; C parity; sel06 −23 on spatial = γ-law;
+frozen-set transparency note — pooled re-rank would swap t7→t8, full data
+reported). Regenerate: `~/hard5_pool.py`.
+| **CALVIN-5** | official 5-instruction chains (n=1000 protocol) | the field's accepted long-horizon language benchmark; already our flagship |
+| **RoboCasa-5** | kettle / toaster-door / faucet / microwave / coffee-mug (pre-registered) | third morphology + human-teleop regime; reference-model-validated floors |
+| **Real-world (2–3 tasks)** | cloth fold (primary), kitting throughput, careful-place with glassware | §9d |
+
+### 9b. Main comparisons (arms per benchmark)
+
+A waypoint · B spline fixed-T (LIBERO only — isolates time-allocation) ·
+C spline+time · C+retime (regime-appropriate gating: interval on scripted,
+uniform on human data — the data-regime law IS the setting rule) ·
+C+self-paced · ClangAdv (LIBERO). External: BSP-style global-speedup arm =
+our uniform rung at their single factor (their method is a special case of
+our decode surface — one row shows it); speed-as-input (tempo) and
+data-level (dsel) triad rows already measured at matched budget.
+
+### 9c. Ablations (each isolates one design choice; all already measured)
+
+1. capacity (n6 vs n8; h40 vs h24) — the density law
+2. event segmentation (B vs C at matched capacity) — time-allocation's cost: zero
+3. retiming granularity (uniform/chunk/interval × 2 data regimes) — the inversion
+4. duration head usage (chunk-selective needs T̂; uniform doesn't) — what T̂ buys
+5. replan schedule (fixed nas grid vs T̂−margin) — the margin law
+6. conditioning mix (granular-only 34 vs mixed 88) + adverbs (87, steering t=7.98)
+7. normalization/stats construction (window-sampled vs episode-contiguous; the
+   RoboCasa loss-33 lesson) — appendix material
+
+### 9d. Real-world tasks + metrics (speed + language showcase)
+
+1. **Cloth fold** (novice-teleop demos = the compressible regime the census
+   predicts): metrics = fold-success, wall-clock/fold at 1× vs retimed, fold
+   quality rubric; claim = CALVIN sign-flip on hardware.
+2. **Kitting throughput**: items/hour at matched success, T̂-gated selective
+   vs uniform vs base — the industrial framing.
+3. **Careful-place (glass)**: "quickly move the cup" vs "slowly and carefully
+   place the glass" — language-commanded speed live on hardware; metrics =
+   executed speed ratio, placement force/success. STEP sequential testing for
+   all hardware comparisons (pre-registered thresholds; batch tests stay
+   frozen at the sim sample sizes already run).
+
+### 9e. Metrics (uniform across benchmarks)
+
+success / avg_len · realized speedup on matched solved episodes · policy
+calls per episode · beta-posterior intervals + Barnard/McNemar per protocol ·
+commanded-vs-realized speed curves · (hardware) jerk + contact force.
+
+### 9f. Language-backbone note (Xiatao pt 3)
+
+SmolVLA's language tower is SmolLM2-class (~135–360M) — plausibly a ceiling
+for clause-level steering, and pi0.5-scale backbones are the right test —
+BUT the redundancy law says backbone size is not the binding constraint for
+object steering in-domain: object words carry zero conditional information in
+demo data regardless of encoder capacity. Adverb steering (t=7.98) proves the
+small tower reads and uses language when language is informative. Position in
+the paper: limitation + future work (pi0.5 port), with the redundancy law as
+the data-design prescription that any backbone will need.
