@@ -50,6 +50,61 @@ uses three training seeds, exact replay, 6,000 rollouts, and a hierarchical conf
 interval. The manuscript should exploit that credibility without spending a page on
 experimental bookkeeping.
 
+### Full-paper visual and hardware audit
+
+The following conclusions come from inspecting the complete eight-page PDFs, not only
+their abstracts.
+
+| paper | page-one visual strategy | main-result presentation | hardware footprint |
+|---|---|---|---|
+| hPGA-DP | no teaser; the architecture appears on page 3 | one combined task-image/table/training-curve figure | approximately one page across pages 5--6; two tasks, 200 demonstrations each |
+| ACG | polished half-page conceptual diagram plus a three-domain gain plot | one cross-domain table followed by targeted coherence and ablation figures | two tasks, 50/40 demonstrations, 10 trials repeated three times; hardware shares the main table |
+| ITPS | large photographic montage that communicates all three steering interfaces | alignment-versus-validity tables plus trajectory filmstrips | two kitchen skills, 60 demonstrations each; roughly one page including the behavior graph and result table |
+| FPO | no page-one figure; dense technical introduction | one clean four-suite table, learning curves, and latent/action diagnostics | none; accepted with simulation only |
+
+There is no single cosmetic template. Clear papers range from conservative IEEE plots
+to polished graphical abstracts. The strongest pattern for our kind of capability
+paper is the ACG/ITPS pattern: **show the intervention and resulting behavior before
+the reader reaches the equations**. PACE, while a concurrent preprint rather than an
+accepted-paper calibration point, sets the best current visual bar: its full-width
+first-page figure combines the fixed-horizon failure, method block, headline numbers,
+and a phase-by-phase rollout. Our Figure 1 should target this level of information
+design without copying its style.
+
+The supplied hardware photograph is the same Yale dual-xArm7-on-linear-actuator
+platform shown in hPGA-DP. Its 3D-printed non-cuboid stacking and drawer fixtures also
+match that paper's established task infrastructure. This materially lowers setup risk:
+we can reuse the calibrated platform and reliable physical interactions while asking
+a different question about clause composition and timing. The accepted hPGA-DP paper
+confirms that two well-chosen tasks and about one page of hardware are credible at
+ICRA; ACG and ITPS show that 40--60 demonstrations per task and 10 paired trials per
+run can also be publishable when the intervention is clear.
+
+### Direct quality assessment of our package
+
+Our current evidence is in the accepted-paper range before hardware:
+
+- FPO's accepted simulation-only headline is 87.2% average LIBERO success and a
+  5.1-point LIBERO-Long gain over its strongest reported comparison. Our primary
+  representation-specific language interaction is **+9.33 points**, positive across
+  three training seeds, layered on much larger within-head clause gains.
+- ACG reports an average 9.6-point improvement across its combined domains with three
+  repeats and 10 real trials per task. Our primary simulation result has substantially
+  more evaluation depth and exact paired replay.
+- ITPS succeeds through a clean behavioral intervention and an alignment/success
+  decomposition. Our clause-order experiment provides the analogous causal evidence,
+  but its final-conjunction drop means the paper must distinguish first-subgoal
+  steering from full reversed-order completion.
+- hPGA-DP demonstrates that the exact available hardware platform and 3D-printed
+  fixtures can support an accepted two-task, one-page physical evaluation.
+
+The package is therefore not held back by the quantity of results. Its acceptance
+risks are (i) explaining the novelty relative to three concurrent spline papers,
+(ii) preventing reviewers from attributing the whole language gain to relabeling,
+and (iii) presenting a clean physical confirmation. The matched A/C interaction,
+learned event-clock ablation, and CALVIN timing result directly answer the first two;
+a concise drawer/stack hardware study answers the third.
+
 ## Closest technical literature
 
 ### Continuous and spline action representations

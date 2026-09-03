@@ -7,18 +7,18 @@
 
 **Recommended title**
 
-> **From Language Clauses to Trajectory Programs: Event-Aligned Spline Action Heads
-> for Vision-Language-Action Policies**
+> **Language-Addressable Spline Action Programs for Long-Horizon
+> Vision-Language-Action Policies**
 
 Strong alternatives:
 
-- **Language-Addressable Spline Actions for Long-Horizon Robot Policies**
-- **Event-Aligned Spline Action Programs for Language-Steerable VLAs**
+- **Event-Aligned Spline Action Programs for Language-Steerable Robot Policies**
+- **Executable Language Programs with Event-Aligned Spline Actions**
 
-The first title is the most differentiated. It does not compete with BSP, BEAST, or
-Spline Policy for the generic claim “splines are a useful action representation.” It
-names the new object in this paper: a language clause paired with a compact trajectory
-and its learned physical duration.
+The first title is one phrase, has no colon, and is the most differentiated. It does
+not compete with BSP, BEAST, or Spline Policy for the generic claim “splines are a
+useful action representation.” It names the new object in this paper: a language
+clause paired with a compact trajectory and its learned physical duration.
 
 **One-sentence thesis**
 
@@ -188,9 +188,11 @@ RoboCasa and hardware answer Q3 in new domains; CALVIN and the rate study answer
 
 ## Figure and table plan
 
-### Figure 1 — paper teaser and method (full width, top of page 1)
+### Figure 1 — paper teaser and method (full width, page 1)
 
-Three horizontally connected panels:
+The visual target is the information density of PACE's page-one overview and the
+behavioral clarity of ACG/ITPS, rendered in our own visual language. Use three
+horizontally connected panels:
 
 1. a whole instruction split into two executable clauses;
 2. each clause mapped to eight spline control points plus duration, compared with a
@@ -199,8 +201,9 @@ Three horizontally connected panels:
    changed timing/rate changes execution without changing geometry.
 
 Place two headline callouts directly in the figure: **+9.33 pp spline-specific clause
-gain** and **+0.379 chain length at 1.42x**. Figure 1 should make the entire paper
-understandable before the method equations.
+gain** and **+0.379 chain length at 1.42x**. Use a colorblind-safe blue/orange pair,
+direct labels rather than a detached legend, and vector text at final print size.
+Figure 1 should make the entire paper understandable before the method equations.
 
 ### Table I — broad competence and primary clause factorial
 
@@ -290,19 +293,44 @@ within the deadline. Do not start broad new language ablations first.
 ### Priority 1 — hardware aligned with the paper claim
 
 Use the existing `docs/REAL_ROBOT_COMPOSITIONAL_PLAN.md` as the starting protocol,
-then adapt it to the actual arm, cameras, teleoperation stack, and 3D-printed tasks.
-The minimum strong package is two tasks:
+adapted to the photographed Yale platform: two 7-DoF xArm7 arms mounted on 1-DoF
+linear actuators, with a handheld one-arm teleoperation interface and existing
+3D-printed non-cuboid stack/drawer fixtures. Confirm which arm carries the camera and
+which carries the gripper before collection. The rail can remain fixed unless a reset
+or transport is unreachable without it; avoiding unnecessary base motion simplifies
+the action space and evaluation.
 
-1. **Compositional/order task:** train on individual or seen two-step programs; test a
-   held-out object/target pairing or order. Compare whole captions versus executable
-   clauses, and waypoint versus spline if training time permits.
-2. **Matched later-clause task:** hold observation and first clause fixed; change only
-   the second target/final state. Measure prefix similarity and post-switch divergence.
+This is the same physical platform and fixture family used by the accepted hPGA-DP
+ICRA 2026 paper, which reported two tasks with 200 demonstrations each in approximately
+one page. Two other accepted steering/VLA papers used two hardware tasks with 40--60
+demonstrations and about 10 trials per task. We should reuse the established platform
+but test a new language/action-program hypothesis. The minimum strong package is:
 
-Use 10--20 frozen paired initial configurations per condition, interleave treatments,
-and report first-subgoal, final success, and requested order. Add a timing/control-rate
-condition only after these work. Two carefully controlled tasks are better aligned
-with the manuscript than three unrelated demonstrations.
+1. **Drawer program (primary):** `open drawer -> insert red object -> close drawer`,
+   paired with a later-clause intervention such as `leave the drawer open` or a second
+   compatible target. This is the strongest visually obvious long-horizon/alignment
+   task because the first two clauses and initial scene can be identical while only
+   the requested terminal state changes.
+2. **Non-cuboid stack/program composition (secondary):** use the existing printed
+   blocks for two demonstrated primitives and a held-out order or composition that is
+   physically valid. Score requested first primitive and final construction. If the
+   printed geometry admits only one stable order, use it as a timing/control-rate task
+   rather than forcing an invalid compositional split.
+
+Collect each physical trajectory once and derive whole-caption and clause-labeled
+views from identical frames/actions. The preferred comparison is the full 2x2
+waypoint/spline by whole/clause factorial. If four hardware checkpoints cannot all
+reach competence, preserve the simulation factorial and use the competent spline
+whole/clause pair for the hardware capability demonstration; never compare treatments
+trained on different physical episodes.
+
+Start with approximately 40--60 demonstrations per training program, balanced across
+pose bins; add data in balanced blocks only if seen-program validation is inadequate.
+Use at least 10 and preferably 20 frozen paired initial configurations per condition,
+interleave treatments, and report first-subgoal, final success, requested order, and
+prefix/late trajectory divergence. Add a timing/control-rate condition only after the
+language result works. Two carefully controlled tasks are better aligned with the
+manuscript than three unrelated demonstrations.
 
 ### Priority 2 — paper assets, not another benchmark
 
@@ -329,7 +357,9 @@ differentiate it.
 
 ## Hardware page standard
 
-The hardware section need not occupy more than about 0.65--0.9 page. It must contain:
+The hardware section need not occupy more than about 0.65--0.9 page. The accepted
+hPGA-DP paper on this exact platform uses roughly one page for two tasks; ACG and ITPS
+do the same on other platforms. Our section must contain:
 
 - robot/camera/control mode and number of demonstrations;
 - the train/test program split;
@@ -385,7 +415,7 @@ confidently and prevents a last-day correction from weakening the story.
 
 Approve or revise four choices before prose drafting:
 
-1. the recommended title and “language clauses to trajectory programs” framing;
+1. the recommended one-phrase title and language-addressable action-program framing;
 2. executable clauses as the primary headline, CALVIN timing as the second;
 3. the 6.5-page content / 1.5-page reference budget;
 4. one gated compositional simulation closeout plus two focused hardware tasks, with no
