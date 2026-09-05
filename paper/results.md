@@ -56,7 +56,7 @@ Controls isolate the mechanism:
 | evaluation interface | waypoint A mean effect | spline C mean effect | interpretation |
 |---|---:|---:|---|
 | fixed two-clause clock | **+34.33 pp** | **+43.67 pp** | primary matched-head estimand |
-| learned event clock | — | **+40.33 pp** | gain persists with spline event scheduling |
+| predicted action-event clock | — | **+40.33 pp** | gain persists when the policy's close-to-open gripper event advances the clause |
 | static compound prompt | **−9.33 pp** | **−24.0 pp** | fine-tuning alone does not explain the gain |
 
 All 30 evaluation gates passed independent fresh-process replay: 6,000 rollouts with
@@ -239,13 +239,15 @@ a larger grasp-and-lift evaluation, and a matched waypoint/spline comparison.
 | test | result | conclusion |
 |---|---:|---|
 | Held-out event-duration calibration | MAE 1.61 steps; Pearson r=.819; event/cap balanced accuracy=.892 | learned duration predicts action-event timescale well |
-| Three-seed clause execution with event clock | mean **+40.33 pp** (per seed +44/+40/+37) | learned event timing is a usable clause scheduler |
-| Event clock versus fixed clock on clause-trained C | 54% vs 58% (seed 1000) and 56% vs 56% (seed 1001 matched run); differences non-significant | event timing is competitive, but does not replace semantic completion detection |
+| Three-seed clause execution with predicted action-event clock | mean **+40.33 pp** (per seed +44/+40/+37) | the policy's predicted close-to-open gripper event is a usable clause switch |
+| Action-event clock versus fixed clock on clause-trained C | 54% vs 58% (seed 1000) and 56% vs 56% (seed 1001 matched run); differences non-significant | the action-event switch is competitive, but does not replace semantic completion detection |
 
-The head comparison uses the same fixed language clock; learned event scheduling is a
-separate deployment ablation. Its large clause gain and parity with the fixed clock
-show that the duration channel can trigger useful replanning, while RoboCasa still
-benefits from semantic phase labels and, diagnostically, completion-gated switching.
+The head comparison uses the same fixed language clock; predicted action-event
+scheduling is a separate deployment ablation. Its large clause gain and parity with
+the fixed clock show that the policy's gripper curve can trigger a useful clause
+switch. The scalar duration channel is validated separately by calibration and
+selective-replanning experiments, while RoboCasa still benefits from semantic phase
+labels and, diagnostically, completion-gated switching.
 ## 0. Method in one paragraph
 
 SmolVLA's flow-matching action expert emits **8 B-spline control points + a gripper
@@ -278,7 +280,7 @@ language-commanded speed — with a **predictive theory of when each knob helps*
 | C spline + time-alloc | 92.3 | 77.3 | 89.3 | 63.7 | **80.7** | ±1.3 |
 | *published SmolVLA ref (1 seed)* | *96* | *90* | *92* | *71* | *87.3* | — |
 
-- 3 training seeds, n=1200/arm/suite, **overlapping CIs → statistical parity** (all
+- 3 training seeds, n=1,200/arm across four suites (300/suite), **overlapping CIs → statistical parity** (all
   arms letter "a" under Barnard+Bonferroni). No suite-level ordering survives
   protocol-crossing (an apparent spatial gap dissolved under a second eval harness).
 - **The spline + time-allocation representation costs nothing on scripted data**; C is

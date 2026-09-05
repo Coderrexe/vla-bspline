@@ -1,3 +1,11 @@
-\section{Related Works}
+\section{Related Work}
 \label{sec:related_works}
 
+\textbf{Action representations.}
+Action chunking stabilizes imitation policies by predicting several future actions per query \cite{zhao2023act,chi2023diffusion}. Modern VLAs instantiate this idea with autoregressive tokens or flow-matching experts \cite{pertsch2025fast,black2024pi0,shukor2025smolvla}. Closest to our representation, BEAST compresses continuous action sequences into B-spline tokens \cite{zhou2025beast}; B-spline Policy predicts continuous curves that can be resampled and manually time-scaled \cite{han2026bsp}; and Spline Policy studies spline outputs across policy families, including editing, uncertainty, and controller compatibility \cite{tian2026spline}. We do not claim the first spline head, smooth decoding, or arbitrary-rate resampling. We instead learn the physical duration to the next manipulation event and test a new interaction: whether this event-aligned representation amplifies the benefit of executing language piece by piece.
+
+\textbf{Long-horizon language control.}
+Large VLAs use heterogeneous co-training and semantic prediction to execute extended tasks \cite{black2025pi05}, while Long-VLA introduces phase-aware inputs \cite{fan2025longvla}. VLAs-as-Tools delegates planning and progress monitoring to a high-level VLM that invokes specialized policies \cite{lei2026tools}. In contrast, \method{} keeps one end-to-end VLA and makes its action units directly addressable by an ordered clause list. Counterfactual studies show that policies can override language with visual shortcuts \cite{glossop2025cast,fang2026counterfactual}; accordingly, we complement success with paired order and wrong-instruction interventions. This follows the broader lesson from inference-time policy steering that alignment requires measuring whether the requested behavior changes, not merely whether a rollout remains valid \cite{wang2025itps}.
+
+\textbf{When to replan and how fast to act.}
+PACE selects a replanning horizon at inference time from low-speed transitions in a predicted action chunk \cite{nie2026pace}. Our event labels supervise time-to-event directly, coupling a language clause to a physical clock. Decoding the same geometry on a warped or denser time grid connects that clock to speed and control-rate adaptation. This timing capability is not our sole novelty; it closes the loop between semantic program progress and continuous robot execution.

@@ -27,6 +27,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    plt.rcParams.update({"pdf.fonttype": 42, "ps.fonttype": 42})
     columns = [
         "Start\n(step 0)",
         "Pick clause\n(step 150)",

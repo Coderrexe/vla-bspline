@@ -258,7 +258,7 @@ directly they support the thesis.
 |---|---|---|
 | LIBERO A/B/C three-seed suite comparison | Table I | competence/control |
 | three-seed exact clause factorial | Table I + Figure 2 | primary headline |
-| learned event clock and static-prompt controls | text/Figure 2 caption | mechanism |
+| predicted action-event clock and static-prompt controls | text/Figure 2 caption | mechanism |
 | clause-order intervention | Figure 2 | behavioral causality |
 | held-out composition | Figure 2 only if full competent evaluation is positive | strongest possible extension |
 | RoboCasa target and semantic phases | Table II + short paragraph | hard-domain replication |

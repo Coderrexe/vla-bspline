@@ -1,3 +1,31 @@
-\section{Methodology}
-\label{sec:technical_overview}
+\section{Language-Addressable Spline Action Programs}
+\label{sec:method}
 
+Let a VLA policy $\pi_\theta$ receive image observations $o_t$, robot state $s_t$, and language $\ell_t$. A conventional chunking policy predicts a fixed sequence $[a_t,\ldots,a_{t+H-1}]$. We replace only this output target and its decoder; the visual encoder, language model, and flow-matching action expert remain unchanged.
+
+\subsection{Shape--Time Factorization}
+
+For an action segment of duration $T$, define the cumulative commanded end-effector path $p_0=0$ and $p_k=\sum_{j<k}a^{\mathrm{pose}}_j$. We represent this path by a clamped, uniform cubic B-spline
+\begin{equation}
+    p(u)=\sum_{i=0}^{n-1}B_{i,3}(u)c_i, \qquad u=t/T\in[0,1],
+    \label{eq:spline}
+\end{equation}
+with $n=8$ control points. Endpoints are pinned, $c_0=0$ and $c_{n-1}=p_T$; the interior controls minimize $\sum_{k=0}^{T}\|p(k/T)-p_k\|_2^2$. We precompute the resulting least-squares operators for every allowed $T$, reducing target construction and decoding to batched matrix products. A separate spline fits the raw binary gripper command and is thresholded by sign at decode.
+
+One policy output token represents one pose and gripper control point. An eighth supervised channel contains $\log T$, replicated over the eight tokens and averaged at decode. Thus the action expert emits eight structured tokens instead of 50 waypoint tokens. Targets are standardized per token inside the policy; the external action processor is the identity so that decoded deltas retain their physical meaning. We train with SmolVLA's original conditional flow-matching objective \cite{lipman2023flow,shukor2025smolvla}, applied to these transformed targets.
+
+\subsection{Event-Aligned Targets}
+
+Fixed windows often bisect grasps or contacts. We instead terminate a training target at the first event after a minimum of eight steps: (i) a gripper-sign transition, (ii) two consecutive pose speeds below $0.15$ times the within-window median, or (iii) episode end. If none occurs, the segment is capped at 24 steps (16 for 10-Hz CALVIN). The selected endpoint gives both the path-fitting interval and duration label. This construction makes $T$ a supervised time-to-event rather than an arbitrary chunk size.
+
+At inference, the model predicts $\hat T=\exp(\frac{1}{n}\sum_i\widehat{\log T}_i)$, clamped to the training range. Sampling Eq.~\eqref{eq:spline} at $h$ phases $u_j$ gives positional commands $p(u_j)$; differences $p(u_j)-p(u_{j-1})$ recover executable delta actions. Replanning at $\hat T$ therefore aligns policy queries to predicted manipulation events.
+
+\subsection{Executable Language Clauses}
+
+A long instruction is represented as an ordered program $\mathcal{L}=(\ell^1,\ldots,\ell^M)$. The active clause replaces the whole-task caption in the ordinary VLA language input; no planner, tool library, or architecture change is introduced. For the main two-subgoal study, demonstrations are split at the first gripper release following at least 48 consecutive closed commands. The release remains under clause 1 and the next observation/action pair begins clause 2. All images, states, actions, episode indices, and optimization schedules are otherwise identical to the whole-caption dataset.
+
+During execution a scheduler advances the clause pointer and clears actions generated under the preceding clause. The primary head comparison uses the same outcome-independent clock for waypoint and spline policies: the task-specific median causal switch frame from the training demonstrations (139 and 107 steps). This isolates the action-representation interaction. A second deployment condition advances on the policy's predicted close-to-open gripper event; a separate privileged predicate scheduler is used only for the diagnostic order intervention. The duration channel independently controls when the policy replans within each clause.
+
+\subsection{One Curve, Multiple Physical Clocks}
+
+Because $p$ is parameterized by normalized phase, timing changes need not alter its learned geometry. A monotone time map $\phi:[0,1]\!\rightarrow\![0,1]$ produces $p(\phi(u))$: uniform compression changes overall pace, while interval-selective warping protects slow contact regions. Sampling $p$ at $h=\rho\hat T$ rather than $\hat T$ changes control rate by ratio $\rho$ while preserving endpoints and nominal velocity. If any decoded delta exceeds an actuator bound, feasibility stretch increases $h$ until the bound is met. These operations use one checkpoint and require no additional policy queries or neural inference.

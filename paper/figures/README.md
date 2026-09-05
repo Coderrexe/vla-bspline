@@ -2,6 +2,7 @@
 
 | figure | generator | source evidence |
 |---|---|---|
+| `ICRA/figures/control_results.pdf` | `scripts/figures/plot_icra_control_results.py` | CALVIN absolute seed values from `docs/STATS_TABLES.md` / `docs/TEAM_UPDATE.md`; protocol-crossed LIBERO retiming and paired rate cells from `paper/results.md` |
 | `headline_results.pdf` | `scripts/analysis/plot_headline_results.py` | `outputs/language_clause_exact/locked_3seed_factorial_2327539.json` plus `outputs/robocasa_confirm_n40/official_phase_50scene_stats.json` |
 | `kettle_phase_storyboard.pdf` | `scripts/analysis/plot_kettle_video_forensics.py` | target-split seed-1001 videos from jobs 2327930 (original labels, failure) and 2327934 (official phases, success) |
 | `robocasa_phase_progress_seed1000.pdf` | `scripts/analysis/plot_robocasa_phase_progress.py` | validated two-seed artifact; training seed 1000, n=50/task/condition |

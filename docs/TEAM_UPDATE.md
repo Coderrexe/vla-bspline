@@ -9,7 +9,7 @@ contrasts; exact paired McNemar / paired t where per-episode pairing exists).*
 tasks" = **5 tasks per benchmark × 3 benchmarks**, chosen once and never changed:
 - **LIBERO** — the 5 headline tasks are the four standard suites reported as suite
   averages (object, spatial, goal, long) plus the pooled 40-task average; per-suite
-  evals are 10 tasks × 10 episodes × 3 seeds (n=1200/arm/suite).
+  each suite has 10 tasks × 10 episodes × 3 seeds (300/suite; n=1,200/arm across four suites).
 - **CALVIN** — the 5 subtasks of the official long-horizon chain (ABCD→D), scored by
   the official `avg_len` (mean subtasks completed per 5-task chain), 1000 chains × 3
   seeds.

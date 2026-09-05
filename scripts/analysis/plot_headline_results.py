@@ -69,22 +69,30 @@ def main() -> None:
     )
     rc_counts = [(2, 50, 6, 50), (2, 50, 10, 50), (4, 100, 16, 100)]
 
-    plt.rcParams.update({"font.size": 9, "axes.spines.top": False, "axes.spines.right": False})
+    plt.rcParams.update(
+        {
+            "font.size": 9,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+        }
+    )
     fig, axes = plt.subplots(1, 3, figsize=(10.8, 3.15), constrained_layout=True)
-    blue, orange = "#3B6FB6", "#D26A32"
+    blue, orange = "#0072B2", "#D55E00"
 
     x = np.arange(3)
     width = 0.34
-    axes[0].bar(x - width / 2, a_gain, width, color=blue, label="Waypoint A")
-    axes[0].bar(x + width / 2, c_gain, width, color=orange, label="Spline C")
+    axes[0].bar(x - width / 2, a_gain, width, color=blue, edgecolor="white", linewidth=0.5, label="Waypoint A")
+    axes[0].bar(x + width / 2, c_gain, width, color=orange, edgecolor="white", linewidth=0.5, hatch="//", label="Spline C")
     for xpos, values in ((x - width / 2, a_gain), (x + width / 2, c_gain)):
         for xx, yy in zip(xpos, values, strict=True):
             axes[0].text(xx, yy + 1.1, f"+{yy:.0f}", ha="center", va="bottom", fontsize=8)
     axes[0].set_xticks(x, [str(seed) for seed in seeds])
     axes[0].set_xlabel("Training seed")
     axes[0].set_ylabel("Clause gain (percentage points)")
-    axes[0].set_ylim(0, 56)
-    axes[0].legend(frameon=False, loc="lower right")
+    axes[0].set_ylim(0, 59)
+    axes[0].legend(frameon=False, loc="upper left", ncol=2, fontsize=7.5, handlelength=1.6, columnspacing=1.1)
     axes[0].set_title("a  Executable language clauses", loc="left", fontweight="bold")
 
     axes[1].axhline(0, color="0.65", linewidth=1)
@@ -101,13 +109,13 @@ def main() -> None:
     axes[1].set_xticks([0, 1, 2, 3.1], ["1000", "1001", "1002", "Mean"])
     axes[1].set_ylabel("Spline − waypoint clause gain (pp)")
     axes[1].set_ylim(-3, 21)
-    axes[1].legend(frameon=False, fontsize=7.5, loc="upper right")
+    axes[1].legend(frameon=False, fontsize=7.5, loc="upper left")
     axes[1].set_title("b  Head-specific interaction", loc="left", fontweight="bold")
 
     labels = ["Kettle\nfixed", "Rinse\nfixed", "Aggregate\nfixed"]
     x = np.arange(3)
-    axes[2].bar(x - width / 2, 100 * rc_original, width, color="0.72", label="Original labels")
-    axes[2].bar(x + width / 2, 100 * rc_official, width, color=orange, label="Official phases")
+    axes[2].bar(x - width / 2, 100 * rc_original, width, color="0.72", edgecolor="white", linewidth=0.5, label="Original labels")
+    axes[2].bar(x + width / 2, 100 * rc_official, width, color=orange, edgecolor="white", linewidth=0.5, hatch="//", label="Official phases")
     for index, (original, n_original, official, n_official) in enumerate(rc_counts):
         axes[2].text(index - width / 2, 100 * rc_original[index] + 0.8, f"{original}/{n_original}", ha="center", va="bottom", fontsize=7.5)
         axes[2].text(index + width / 2, 100 * rc_official[index] + 0.8, f"{official}/{n_official}", ha="center", va="bottom", fontsize=7.5)

@@ -1,0 +1,82 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{kim2024openvla,black2024pi0,shukor2025smolvla}
+\citation{zhao2023act,chi2023diffusion}
+\citation{pertsch2025fast,black2024pi0,shukor2025smolvla}
+\citation{zhou2025beast}
+\citation{han2026bsp}
+\citation{tian2026spline}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{section.1}\protected@file@percent }
+\newlabel{sec:introduction}{{I}{1}{Introduction}{section.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{1}{section.2}\protected@file@percent }
+\newlabel{sec:related_works}{{II}{1}{Related Work}{section.2}{}}
+\citation{black2025pi05}
+\citation{fan2025longvla}
+\citation{lei2026tools}
+\citation{glossop2025cast,fang2026counterfactual}
+\citation{wang2025itps}
+\citation{nie2026pace}
+\citation{lipman2023flow,shukor2025smolvla}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {Language-addressable spline action programs.} A long-horizon instruction is scheduled as executable clauses. For each clause, the VLA predicts eight control points for a continuous path, a gripper curve, and event duration $T$, rather than a dense fixed-rate waypoint array. The matched experiment isolates an additional +9.33~pp clause benefit for the spline head; the same shape--time factorization supports successful decode-time retiming on CALVIN.}}{2}{figure.1}\protected@file@percent }
+\newlabel{fig:overview}{{1}{2}{\textbf {Language-addressable spline action programs.} A long-horizon instruction is scheduled as executable clauses. For each clause, the VLA predicts eight control points for a continuous path, a gripper curve, and event duration $T$, rather than a dense fixed-rate waypoint array. The matched experiment isolates an additional +9.33~pp clause benefit for the spline head; the same shape--time factorization supports successful decode-time retiming on CALVIN}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {III}Language-Addressable Spline Action Programs}{2}{section.3}\protected@file@percent }
+\newlabel{sec:method}{{III}{2}{Language-Addressable Spline Action Programs}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-A}Shape--Time Factorization}{2}{subsection.3.1}\protected@file@percent }
+\newlabel{eq:spline}{{1}{2}{Shape--Time Factorization}{equation.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-B}Event-Aligned Targets}{2}{subsection.3.2}\protected@file@percent }
+\citation{shukor2025smolvla}
+\citation{liu2023libero}
+\citation{mees2022calvin}
+\citation{nasiriany2026robocasa365}
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-C}Executable Language Clauses}{3}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {III-D}One Curve, Multiple Physical Clocks}{3}{subsection.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Experiments}{3}{section.4}\protected@file@percent }
+\newlabel{sec:experiments}{{IV}{3}{Experiments}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-A}Setup}{3}{subsection.4.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces LIBERO success (\%, three training seeds). ``Avg.'' averages the four suites; $\pm $ is its seed standard deviation.}}{3}{table.1}\protected@file@percent }
+\newlabel{tab:libero}{{I}{3}{LIBERO success (\%, three training seeds). ``Avg.'' averages the four suites; $\pm $ is its seed standard deviation}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-B}Q1: Broad Competence Is Preserved}{3}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-C}Q2: Executable Clauses Improve Long-Horizon Tasks}{3}{subsection.4.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \textbf  {Executable-language results.} (a) Clauses improve both heads on two LIBERO-Long tasks and all training seeds. (b) Their gain is consistently larger for the event-aligned spline head; the hierarchical interval excludes zero. (c) Official semantic phases improve the first-seed RoboCasa365 target split. The independent-seed replication appears in Table~\ref {tab:robocasa}.}}{4}{figure.2}\protected@file@percent }
+\newlabel{fig:headline}{{2}{4}{\textbf {Executable-language results.} (a) Clauses improve both heads on two LIBERO-Long tasks and all training seeds. (b) Their gain is consistently larger for the event-aligned spline head; the hierarchical interval excludes zero. (c) Official semantic phases improve the first-seed RoboCasa365 target split. The independent-seed replication appears in Table~\ref {tab:robocasa}}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-D}Q3: Language Changes the Requested Behavior}{4}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-E}RoboCasa365 Semantic Phases}{4}{subsection.4.5}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces RoboCasa365 target-split full-task success. Each cell is original labels $\rightarrow $ official phase labels.}}{4}{table.2}\protected@file@percent }
+\newlabel{tab:robocasa}{{II}{4}{RoboCasa365 target-split full-task success. Each cell is original labels $\rightarrow $ official phase labels}{table.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-F}Q4: The Learned Physical Clock Is Controllable}{4}{subsection.4.6}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \textbf  {Matched RoboCasa365 Kettle rollout.} The original-caption and official-phase policies share the exact initial observation. Both reach grasp and stove contact at similar times; only the phase-trained policy completes burner actuation (516 steps versus failure at the 1,500-step limit).}}{5}{figure.3}\protected@file@percent }
+\newlabel{fig:kettle}{{3}{5}{\textbf {Matched RoboCasa365 Kettle rollout.} The original-caption and official-phase policies share the exact initial observation. Both reach grasp and stove contact at similar times; only the phase-trained policy completes burner actuation (516 steps versus failure at the 1,500-step limit)}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {IV-G}Real-Robot Evaluation}{5}{subsection.4.7}\protected@file@percent }
+\newlabel{sec:hardware}{{IV-G}{5}{Real-Robot Evaluation}{subsection.4.7}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Discussion and Conclusion}{5}{section.5}\protected@file@percent }
+\newlabel{sec:discussion}{{V}{5}{Discussion and Conclusion}{section.5}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \textbf  {Timing and control-rate results.} (a) Absolute CALVIN chain length for three training seeds; horizontal ticks are means and lines connect each C-base seed to its retimed counterpart. Uniform retiming recovers the unretimed spline deficit and exceeds waypoint A while executing faster. (b) On LIBERO Object, the same C checkpoint traces a speed--success frontier; the separately retrained speed-as-input baseline collapses near the same speed. (c) Sampling the same spline at twice the control rate repairs LIBERO Spatial t5 under two independently budgeted horizon protocols; direct waypoint replay fails on the measured $2\times $ condition.}}{6}{figure.4}\protected@file@percent }
+\newlabel{fig:control}{{4}{6}{\textbf {Timing and control-rate results.} (a) Absolute CALVIN chain length for three training seeds; horizontal ticks are means and lines connect each C-base seed to its retimed counterpart. Uniform retiming recovers the unretimed spline deficit and exceeds waypoint A while executing faster. (b) On LIBERO Object, the same C checkpoint traces a speed--success frontier; the separately retrained speed-as-input baseline collapses near the same speed. (c) Sampling the same spline at twice the control rate repairs LIBERO Spatial t5 under two independently budgeted horizon protocols; direct waypoint replay fails on the measured $2\times $ condition}{figure.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Additional uses of the learned spline interface. Each row states what changes relative to the named baseline; $\dagger $ marks a supporting single-seed mechanism cell rather than a headline aggregate.}}{6}{table.3}\protected@file@percent }
+\newlabel{tab:control}{{III}{6}{Additional uses of the learned spline interface. Each row states what changes relative to the named baseline; $\dagger $ marks a supporting single-seed mechanism cell rather than a headline aggregate}{table.3}{}}
+\bibstyle{ieeetr}
+\bibdata{refs}
+\bibcite{kim2024openvla}{{1}{}{{}}{{}}}
+\bibcite{black2024pi0}{{2}{}{{}}{{}}}
+\bibcite{shukor2025smolvla}{{3}{}{{}}{{}}}
+\bibcite{zhao2023act}{{4}{}{{}}{{}}}
+\bibcite{chi2023diffusion}{{5}{}{{}}{{}}}
+\bibcite{pertsch2025fast}{{6}{}{{}}{{}}}
+\bibcite{zhou2025beast}{{7}{}{{}}{{}}}
+\bibcite{han2026bsp}{{8}{}{{}}{{}}}
+\bibcite{tian2026spline}{{9}{}{{}}{{}}}
+\bibcite{black2025pi05}{{10}{}{{}}{{}}}
+\bibcite{fan2025longvla}{{11}{}{{}}{{}}}
+\bibcite{lei2026tools}{{12}{}{{}}{{}}}
+\bibcite{glossop2025cast}{{13}{}{{}}{{}}}
+\bibcite{fang2026counterfactual}{{14}{}{{}}{{}}}
+\bibcite{wang2025itps}{{15}{}{{}}{{}}}
+\bibcite{nie2026pace}{{16}{}{{}}{{}}}
+\bibcite{lipman2023flow}{{17}{}{{}}{{}}}
+\bibcite{liu2023libero}{{18}{}{{}}{{}}}
+\bibcite{mees2022calvin}{{19}{}{{}}{{}}}
+\bibcite{nasiriany2026robocasa365}{{20}{}{{}}{{}}}
+\providecommand\NAT@force@numbers{}\NAT@force@numbers
+\gdef \@abspage@last{7}
