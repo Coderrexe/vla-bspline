@@ -38,3 +38,4 @@ wandb/
 # Env / secrets
 .env
 .env.*
+bc_demo/

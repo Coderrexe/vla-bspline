@@ -1,5 +1,12 @@
 # ICRA 2027 manuscript and closeout plan
 
+**Current revision:** [5 September focused plan](ICRA_REVISION_PLAN_2026-09-05.md).
+It implements the team's two-claim feedback and replaces this document's
+capability-heavy main-paper layout. The underlying results remain in the ledger.
+In particular, the +34.3/+43.7 pp language effects are changes in training labels
+under the same clause-scheduled inference interface, not gains over native
+whole-caption inference. Read the complete factorial in `paper/results.md`.
+
 *Decision draft for team review, 3 September 2026. The paper deadline is
 15 September 2026, 11:59 PM Pacific.*
 

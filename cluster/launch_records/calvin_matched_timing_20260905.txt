@@ -1,0 +1,64 @@
+CALVIN matched physical-clock comparison — 2026-09-05
+
+Protocol: docs/ICRA_REVISION_PLAN_2026-09-05.md
+Source snapshot (no checkpoint writes):
+  /home/zs442/scratch/vla_bspline/code_snapshots/manuscript_clock_20260905_v1
+Result root:
+  /home/zs442/scratch/vla_bspline/artifacts/calvin_matched_timing_20260905
+
+2396957: A_linear seed1000, two-chain engineering smoke, completed.
+2396996: four-arm array 0-3%4, seed1000, two-chain smoke, completed.
+  A_native task 0 / job 2397004
+  A_linear task 1 / job 2397005
+  C_native task 2 / job 2397006
+  C_retime task 3 / job 2396996
+  Gates: identical first-subtask observations, exact query cadence, checkpoint
+  identity within native/retimed pairs, production interpolation CPU contracts.
+  Local audit: outputs/calvin_matched_timing_20260905/smoke_gate_2396996.json
+
+2397013: frozen full matrix 0-11%4, submitted after all smoke gates passed.
+  Tasks 0-3 seed1000, 4-7 seed1001, 8-11 seed1002.
+  Arm order A_native, A_linear, C_native, C_retime.
+  Each cell: first 50 official chains of n_total1000, offset0, EP_LEN360,
+  repeat3, policy seed700000 + 100*chain_index + subtask_index, K5.
+  Retimed alpha0.6; waypoint cumulative raw-command linear interpolation,
+  h30 from H50; spline h=round(0.6*T), T in [8,16]. No feasibility stretch.
+  One GPU, four CPUs, 32 GB, three-hour time limit per cell.
+  Logs: source snapshot/calv_clock_matrix-2397013_<task>.out
+  Every complete log ends with an exact RESULT path.
+
+Harvest all 12 before interpreting comparisons. Validate with
+scripts/analysis/check_calvin_matched_timing.py --nchains 50 --seeds 1000 1001 1002
+followed by all twelve log paths. Do not pool smoke reruns into n or mix these
+freshly seeded matched-cadence runs with the historical K10 CALVIN table.
+
+2397037: automatic CPU analysis, afterok:2397013, kill-on-invalid-dep.
+  Source: /home/zs442/scratch/vla_bspline/code_snapshots/manuscript_clock_analysis_20260905_v1
+  1 CPU, 2 GB, 10-minute bound; no new rollouts or checkpoint writes.
+  Output: artifacts/calvin_matched_timing_20260905/matrix_2397013_audit_2397037.json
+  Refuses incomplete matrices, differing first observations, incorrect query
+  cadence, unequal native/retimed checkpoint weights, or an existing output path.
+  Frozen contrasts: waypoint retiming, spline retiming, retimed C minus retimed A,
+  and retiming interaction. Seed-t and paired-state intervals both recorded.
+  All six synthetic analysis-contract tests passed before submission.
+
+7 September audit and follow-up
+
+2423370: four-run reset component probe, completed. Robot state, scene state,
+  top image, and wrist image match exactly for all 50 initial conditions.
+2423928: stricter four-run probe, completed. Reproduces evaluator get_obs() and
+  the first task string; all 50 packed policy requests also match exactly.
+  Local certificate:
+  outputs/calvin_initial_state_probe_20260907/comparison_2423928.json
+
+Audited matrix 2397013 summary:
+  outputs/calvin_matched_timing_20260905/summary_2397013_audited_2423928.json
+  A native/retimed: 1.52/2.02. C native/retimed: 1.213/1.773.
+  Retiming interaction +0.06; hierarchical 95% interval [-0.50,+0.62].
+  Generic resampling benefits both representations.
+
+2423956: grouped same-node repeat, three jobs (one seed each), failed before
+  rollouts while loading the first A-native policy. The configured offline
+  Hugging Face cache directory exists, but its SmolVLM snapshot is empty as of
+  6 September. No efficacy output was produced or pooled. Do not relaunch until
+  the shared model cache is intentionally restored.

@@ -22,6 +22,7 @@ import argparse
 import collections
 import collections.abc
 import contextlib
+import hashlib
 import json
 import os
 import pickle
@@ -207,10 +208,13 @@ class Policy:
             self.conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.conn.connect(("127.0.0.1", port))
 
-    def reset(self):
+    def reset(self, seed=None):
         if self.random:
             return
-        send_msg(self.conn, {"cmd": "reset"})
+        message = {"cmd": "reset"}
+        if seed is not None:
+            message["seed"] = seed
+        send_msg(self.conn, message)
         recv_msg(self.conn)
 
     def act(self, obs, task):
@@ -220,6 +224,7 @@ class Policy:
             return a, -1
         send_msg(self.conn, pack_obs(obs, task))
         r = recv_msg(self.conn)
+        self.policy_calls = r.get("policy_calls", -1)
         return np.asarray(r["action"], dtype=float), r["that"]
 
     def close(self):
@@ -231,22 +236,34 @@ class Policy:
                 pass
 
 
-def rollout(env, oracle, policy, subtask, lang, ep_len, repeat):
+def rollout(env, oracle, policy, subtask, lang, ep_len, repeat, seed=None):
     obs = env.get_obs()
-    policy.reset()
+    policy.reset(seed)
     start_info = env.get_info()
     action = None
     that = []  # predicted duration per policy call (-1 = no time head)
+    initial = pack_obs(obs, lang)
+    initial_hash = hashlib.sha256(pickle.dumps(initial, protocol=4)).hexdigest()
+    action_hash = hashlib.sha256()
     for step in range(ep_len):
         if step % repeat == 0:
             action, t_hat = policy.act(obs, lang)
             that.append(int(t_hat))
             action = np.asarray(action, dtype=float).copy()
             action[6] = 1.0 if action[6] > 0 else -1.0  # oracle-legal gripper
+        action_hash.update(np.asarray(action, dtype="<f8").tobytes())
         obs, _, _, current_info = env.step(action)
         if len(oracle.get_task_info_for_set(start_info, current_info, {subtask})) > 0:
-            return True, step + 1, that
-    return False, ep_len, that
+            return True, step + 1, that, {
+                "initial_obs_sha256": initial_hash,
+                "action_sha256": action_hash.hexdigest(),
+                "policy_calls": getattr(policy, "policy_calls", -1),
+            }
+    return False, ep_len, that, {
+        "initial_obs_sha256": initial_hash,
+        "action_sha256": action_hash.hexdigest(),
+        "policy_calls": getattr(policy, "policy_calls", -1),
+    }
 
 
 def main():
@@ -265,7 +282,12 @@ def main():
     ap.add_argument("--repeat", type=int, default=3)
     ap.add_argument("--out", required=True)
     ap.add_argument("--random", action="store_true")
+    ap.add_argument("--policy_seed", type=int, default=None,
+                    help="Reseed by global chain and subtask for a fresh paired evaluation.")
+    ap.add_argument("--exclusive", action="store_true", help="Refuse an existing result path.")
     args = ap.parse_args()
+    if args.exclusive and os.path.exists(args.out):
+        raise FileExistsError(args.out)
 
     from omegaconf import OmegaConf
 
@@ -282,18 +304,22 @@ def main():
         robot_obs, scene_obs = get_env_state_for_initial_condition(initial_state)
         env.reset(robot_obs=robot_obs, scene_obs=scene_obs)
         done_count = 0
-        steps, thats = [], []
-        for subtask in sequence:
+        steps, thats, traces = [], [], []
+        for subtask_index, subtask in enumerate(sequence):
             lang = val_annotations[subtask][0]
-            success, n_steps, that = rollout(env, oracle, policy, subtask, lang, args.ep_len, args.repeat)
+            seed = (None if args.policy_seed is None else
+                    args.policy_seed + 100 * (args.seq_offset + i) + subtask_index)
+            success, n_steps, that, trace = rollout(
+                env, oracle, policy, subtask, lang, args.ep_len, args.repeat, seed)
             steps.append(n_steps)
             thats.append(that)
+            traces.append(trace)
             if not success:
                 break
             done_count += 1
         chain_lens.append(done_count)
         records.append({"sequence": list(sequence), "solved": done_count, "steps": steps,
-                        "that": thats})
+                        "that": thats, "traces": traces, "chain_index": args.seq_offset + i})
         if (i + 1) % 10 == 0:
             cl = np.array(chain_lens)
             sr = [float((cl >= k).mean()) for k in range(1, 6)]
@@ -310,8 +336,11 @@ def main():
         "repeat": args.repeat,
         "random": bool(args.random),
         "records": records,
+        "policy_seed": args.policy_seed,
+        "seq_offset": args.seq_offset,
+        "n_total": n_total,
     }
-    with open(args.out, "w") as f:
+    with open(args.out, "x" if args.exclusive else "w") as f:
         json.dump(result, f, indent=1)
     print("SUMMARY " + json.dumps({k: result[k] for k in ("n_seq", "avg_len", "sr")}), flush=True)
 

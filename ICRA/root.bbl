@@ -1,13 +1,13 @@
 \begin{thebibliography}{10}
 
 \bibitem{kim2024openvla}
-M.~J. Kim, K.~Pertsch, S.~Karamcheti, T.~Xiao, A.~Balakrishna, S.~Nair, R.~Rafailov, E.~Foster, G.~Lam, {\em et~al.}, ``Openvla: An open-source vision-language-action model,'' {\em arXiv preprint arXiv:2406.09246}, 2024.
+M.~J. Kim, K.~Pertsch, S.~Karamcheti, T.~Xiao, A.~Balakrishna, S.~Nair, R.~Rafailov, E.~Foster, G.~Lam, {\em et~al.}, ``{OpenVLA}: An open-source vision-language-action model,'' {\em arXiv preprint arXiv:2406.09246}, 2024.
 
 \bibitem{black2024pi0}
 K.~Black, N.~Brown, D.~Driess, A.~Esmail, M.~Equi, C.~Finn, {\em et~al.}, ``$\pi_0$: A vision-language-action flow model for general robot control,'' {\em arXiv preprint arXiv:2410.24164}, 2024.
 
 \bibitem{shukor2025smolvla}
-M.~Shukor, D.~Aubakirova, F.~Capuano, P.~Kooijmans, S.~Palma, A.~Zouitine, M.~Aractingi, C.~Pascal, M.~Russi, A.~Marafioti, S.~Alibert, M.~Cord, T.~Wolf, and R.~Cadene, ``Smolvla: A vision-language-action model for affordable and efficient robotics,'' {\em arXiv preprint arXiv:2506.01844}, 2025.
+M.~Shukor, D.~Aubakirova, F.~Capuano, P.~Kooijmans, S.~Palma, A.~Zouitine, M.~Aractingi, C.~Pascal, M.~Russi, A.~Marafioti, S.~Alibert, M.~Cord, T.~Wolf, and R.~Cadene, ``{SmolVLA}: A vision-language-action model for affordable and efficient robotics,'' {\em arXiv preprint arXiv:2506.01844}, 2025.
 
 \bibitem{zhao2023act}
 T.~Z. Zhao, V.~Kumar, S.~Levine, and C.~Finn, ``Learning fine-grained bimanual manipulation with low-cost hardware,'' in {\em Robotics: Science and Systems}, 2023.
@@ -16,13 +16,13 @@ T.~Z. Zhao, V.~Kumar, S.~Levine, and C.~Finn, ``Learning fine-grained bimanual m
 C.~Chi, Z.~Xu, S.~Feng, E.~Cousineau, Y.~Du, B.~Burchfiel, R.~Tedrake, and S.~Song, ``Diffusion policy: Visuomotor policy learning via action diffusion,'' in {\em Robotics: Science and Systems}, 2023.
 
 \bibitem{pertsch2025fast}
-K.~Pertsch, K.~Stachowicz, B.~Ichter, D.~Driess, S.~Nair, Q.~Vuong, O.~Mees, C.~Finn, and S.~Levine, ``Fast: Efficient action tokenization for vision-language-action models,'' {\em arXiv preprint arXiv:2501.09747}, 2025.
+K.~Pertsch, K.~Stachowicz, B.~Ichter, D.~Driess, S.~Nair, Q.~Vuong, O.~Mees, C.~Finn, and S.~Levine, ``{FAST}: Efficient action tokenization for vision-language-action models,'' {\em arXiv preprint arXiv:2501.09747}, 2025.
 
 \bibitem{zhou2025beast}
-H.~Zhou, W.~Liao, X.~Huang, Y.~Tang, F.~Otto, X.~Jia, X.~Jiang, S.~Hilber, G.~Li, Q.~Wang, {\em et~al.}, ``Beast: Efficient tokenization of b-splines encoded action sequences for imitation learning,'' in {\em Advances in Neural Information Processing Systems}, 2025.
+H.~Zhou, W.~Liao, X.~Huang, Y.~Tang, F.~Otto, X.~Jia, X.~Jiang, S.~Hilber, G.~Li, Q.~Wang, {\em et~al.}, ``{BEAST}: Efficient tokenization of {B}-splines encoded action sequences for imitation learning,'' in {\em Advances in Neural Information Processing Systems}, 2025.
 
 \bibitem{han2026bsp}
-X.~Han, H.~Xiong, H.~Chen, C.~Liu, A.~Torralba, Y.~Zhu, and Y.~Du, ``B-spline policy: Accelerating manipulation policies via b-spline action representations,'' {\em arXiv preprint arXiv:2607.09648}, 2026.
+X.~Han, H.~Xiong, H.~Chen, C.~Liu, A.~Torralba, Y.~Zhu, and Y.~Du, ``{B}-spline policy: Accelerating manipulation policies via {B}-spline action representations,'' {\em arXiv preprint arXiv:2607.09648}, 2026.
 
 \bibitem{tian2026spline}
 M.~Tian, Y.~Li, S.~Liu, A.~Ijspeert, and S.~Calinon, ``Spline policy: A structured representation for robot policies,'' {\em arXiv preprint arXiv:2606.07386}, 2026.
@@ -31,33 +31,33 @@ M.~Tian, Y.~Li, S.~Liu, A.~Ijspeert, and S.~Calinon, ``Spline policy: A structur
 {Physical Intelligence}, K.~Black, N.~Brown, D.~Driess, A.~Esmail, M.~Equi, C.~Finn, {\em et~al.}, ``$\pi_{0.5}$: A vision-language-action model with open-world generalization,'' {\em arXiv preprint arXiv:2504.16054}, 2025.
 
 \bibitem{fan2025longvla}
-Y.~Fan, P.~Ding, S.~Bai, X.~Tong, Y.~Zhu, H.~Lu, F.~Dai, W.~Zhao, Y.~Liu, {\em et~al.}, ``Long-vla: Unleashing long-horizon capability of vision language action model for robot manipulation,'' {\em arXiv preprint arXiv:2508.19958}, 2025.
+Y.~Fan, P.~Ding, S.~Bai, X.~Tong, Y.~Zhu, H.~Lu, F.~Dai, W.~Zhao, Y.~Liu, {\em et~al.}, ``{Long-VLA}: Unleashing long-horizon capability of vision language action model for robot manipulation,'' in {\em Conference on Robot Learning}, 2025.
 
 \bibitem{lei2026tools}
 Z.~Lei, C.~Liu, Y.~Xiong, M.~Xiong, Y.~Ding, Z.~Zhang, W.~Li, and S.~Chen, ``Towards long-horizon embodied agents with tool-aligned vision-language-action models,'' {\em arXiv preprint arXiv:2605.13119}, 2026.
 
 \bibitem{glossop2025cast}
-C.~Glossop, W.~Chen, A.~Bhorkar, D.~Shah, and S.~Levine, ``Cast: Counterfactual labels improve instruction following in vision-language-action models,'' {\em arXiv preprint arXiv:2508.13446}, 2025.
+C.~Glossop, W.~Chen, A.~Bhorkar, D.~Shah, and S.~Levine, ``{CAST}: Counterfactual labels improve instruction following in vision-language-action models,'' {\em arXiv preprint arXiv:2508.13446}, 2025.
 
 \bibitem{fang2026counterfactual}
-Y.~Fang, Y.~Feng, D.~Jing, J.~Liu, Y.~Yang, Z.~Wei, D.~Szafir, and M.~Ding, ``When vision overrides language: Evaluating and mitigating counterfactual failures in vlas,'' {\em arXiv preprint arXiv:2602.17659}, 2026.
+Y.~Fang, Y.~Feng, D.~Jing, J.~Liu, Y.~Yang, Z.~Wei, D.~Szafir, and M.~Ding, ``When vision overrides language: Evaluating and mitigating counterfactual failures in {VLAs},'' {\em arXiv preprint arXiv:2602.17659}, 2026.
+
+\bibitem{nie2026pace}
+J.~Nie, J.~Li, J.~Zhang, J.~Lao, C.~Liu, T.~Zhang, L.~Lin, and S.~Huang, ``{PACE}: Phase-aware chunk execution for robot policies with action chunking,'' {\em arXiv preprint arXiv:2606.00537}, 2026.
 
 \bibitem{wang2025itps}
 Y.~Wang, L.~Wang, Y.~Du, B.~Sundaralingam, X.~Yang, Y.-W. Chao, C.~Perez-D'Arpino, D.~Fox, and J.~Shah, ``Inference-time policy steering through human interactions,'' in {\em IEEE International Conference on Robotics and Automation}, 2025.
-
-\bibitem{nie2026pace}
-J.~Nie, J.~Li, J.~Zhang, J.~Lao, C.~Liu, T.~Zhang, L.~Lin, and S.~Huang, ``Pace: Phase-aware chunk execution for robot policies with action chunking,'' {\em arXiv preprint arXiv:2606.00537}, 2026.
 
 \bibitem{lipman2023flow}
 Y.~Lipman, R.~T.~Q. Chen, H.~Ben-Hamu, M.~Nickel, and M.~Le, ``Flow matching for generative modeling,'' in {\em International Conference on Learning Representations}, 2023.
 
 \bibitem{liu2023libero}
-B.~Liu, Y.~Zhu, C.~Gao, Y.~Feng, Q.~Liu, Y.~Zhu, and P.~Stone, ``Libero: Benchmarking knowledge transfer for lifelong robot learning,'' in {\em Advances in Neural Information Processing Systems}, 2023.
-
-\bibitem{mees2022calvin}
-O.~Mees, L.~Hermann, E.~Rosete-Beas, and W.~Burgard, ``Calvin: A benchmark for language-conditioned policy learning for long-horizon robot manipulation tasks,'' {\em IEEE Robotics and Automation Letters}, 2022.
+B.~Liu, Y.~Zhu, C.~Gao, Y.~Feng, Q.~Liu, Y.~Zhu, and P.~Stone, ``{LIBERO}: Benchmarking knowledge transfer for lifelong robot learning,'' in {\em Advances in Neural Information Processing Systems}, 2023.
 
 \bibitem{nasiriany2026robocasa365}
-S.~Nasiriany, S.~Nasiriany, A.~Maddukuri, and Y.~Zhu, ``Robocasa365: A large-scale simulation framework for training and benchmarking generalist robots,'' in {\em International Conference on Learning Representations}, 2026.
+S.~Nasiriany, S.~Nasiriany, A.~Maddukuri, and Y.~Zhu, ``{RoboCasa365}: A large-scale simulation framework for training and benchmarking generalist robots,'' in {\em International Conference on Learning Representations}, 2026.
+
+\bibitem{mees2022calvin}
+O.~Mees, L.~Hermann, E.~Rosete-Beas, and W.~Burgard, ``{CALVIN}: A benchmark for language-conditioned policy learning for long-horizon robot manipulation tasks,'' {\em IEEE Robotics and Automation Letters}, 2022.
 
 \end{thebibliography}

@@ -59,6 +59,8 @@ def main():
     ap.add_argument("--dataset_root", required=True, help="local calvin_v30 root (ds_meta for make_policy)")
     ap.add_argument("--repo_id", default="fywang/calvin-task-ABCD-D-lerobot")
     ap.add_argument("--port", type=int, required=True)
+    ap.add_argument("--matched_timing", action="store_true",
+                    help="Count neural queries and apply the common raw pose bound.")
     args = ap.parse_args()
 
     policy_cfg = PreTrainedConfig.from_pretrained(args.ckpt)
@@ -71,6 +73,17 @@ def main():
         pretrained_path=args.ckpt,
         preprocessor_overrides={"device_processor": {"device": str(policy.config.device)}},
     )
+
+    query_count = 0
+    if args.matched_timing:
+        original_chunk = policy._get_action_chunk
+
+        def counted_chunk(*chunk_args, **chunk_kwargs):
+            nonlocal query_count
+            query_count += 1
+            return original_chunk(*chunk_args, **chunk_kwargs)
+
+        policy._get_action_chunk = counted_chunk
 
     def act(m):
         top = np.frombuffer(m["top"][0], dtype=np.uint8).reshape(m["top"][1])
@@ -87,7 +100,10 @@ def main():
             action = policy.select_action(batch)
         action = postproc(action)
         a = action.cpu().numpy() if torch.is_tensor(action) else action[ACTION].cpu().numpy()
-        return np.asarray(a).reshape(-1).tolist(), int(getattr(policy, "last_predicted_T", -1))
+        a = np.asarray(a).reshape(-1)
+        if args.matched_timing:
+            a[:6] = np.clip(a[:6], -1.0, 1.0)
+        return a.tolist(), int(getattr(policy, "last_predicted_T", -1))
 
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -102,11 +118,16 @@ def main():
             break
         if m["cmd"] == "reset":
             policy.reset()
+            query_count = 0
+            if "seed" in m:
+                torch.manual_seed(m["seed"])
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed_all(m["seed"])
             send_msg(conn, {"ok": True})
         elif m["cmd"] == "act":
             a, that = act(m)
             n_acts += 1
-            send_msg(conn, {"action": a, "that": that})
+            send_msg(conn, {"action": a, "that": that, "policy_calls": query_count})
     print(f"SERVER_DONE acts={n_acts}", flush=True)
 
 

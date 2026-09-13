@@ -1,5 +1,19 @@
 # ICRA 2027 literature and paper-structure review
 
+## 5 September revision calibration
+
+The new [focused revision plan](ICRA_REVISION_PLAN_2026-09-05.md) records the
+additional full-paper and visual review of the two team-supplied examples,
+[Camera Conditioning](https://arxiv.org/pdf/2510.02268) and
+[MAC-VO](https://arxiv.org/pdf/2409.09479). Their main lesson for this revision is
+to separate a real-data teaser from the method diagram and organize ablations
+around a single scientific question. Comparisons below are qualitative design
+references, not evidence that our acceptance probability or statistical strength
+can be inferred from unrelated effect sizes. In particular, 6,000 replayed
+rollouts are verification depth, not 6,000 independent experimental conditions.
+The duration/gripper/semantic clocks have distinct meanings, detailed in the
+revised method and complete language factorial.
+
 *Verified 3 September 2026. This is a manuscript-design document, not the BibTeX
 file. Every venue label below is linked to a primary source.*
 
@@ -146,11 +160,17 @@ hardware experiments are the clean route to the stronger recombination claim.
 
 The CALVIN result supplies a second capability of the same representation rather than
 a disconnected historical project. Factorizing geometry from time permits a learned
-curve to be retimed without retraining: the best decode recovers **+0.379 average
-chain length at 1.42x realized speed** over the unretimed spline and is **+0.127** over
-the waypoint policy on matched chains. The language-speed result then connects the two
-halves of the paper: “quickly”/“slowly” changes action magnitude by about +/-16%, and
-quick versus plain improves average chain length by **+0.172** at n=600.
+curve to be retimed without retraining: the high-powered historical study recovers
+**+0.379 average chain length at 1.42x realized speed** over the unretimed spline. A
+new apples-to-apples K=5 screen establishes the proper boundary: linear waypoint
+retiming also improves completion (1.52 to 2.02), while the spline moves from 1.21 to
+1.77. Their retiming interaction is only +0.06 with a hierarchical 95% interval of
+[-0.50,+0.62]. The paper therefore does not attribute generic temporal resampling to
+splines. The representation-specific value is the learned event duration, which
+selects segments for compression and schedules policy queries. The language-speed
+result connects the two halves of the paper: “quickly”/“slowly” changes issued motion
+commands by about +/-16%, and quick versus plain improves average chain length by
+**+0.172** at n=600.
 
 This timing evidence should be positioned after executable clauses. It is important
 because it demonstrates that the language-addressable unit has a physical clock, but

@@ -1,0 +1,28 @@
+# Install ONLY into the isolated simba inference environment, never Apollo's venv.
+# After installing these, explicitly install torch==2.11.0+cu128 and
+# torchvision==0.26.0+cu128 from https://download.pytorch.org/whl/cu128.
+# Default PyPI wheels selected cu130; CUDA matching alone does not ensure
+# bit-identical H200/4090 predictions. Keep the fixture comparison reports.
+torch==2.11.0
+torchvision==0.26.0
+transformers==5.5.4
+accelerate==1.14.0
+huggingface-hub==1.22.0
+safetensors==0.8.0
+datasets==4.8.5
+pandas>=2,<3
+num2words>=0.5.14,<0.6
+av==15.1.0
+numpy==2.2.6
+scipy==1.18.1
+dora-rs==1.0.1
+pyarrow==25.0.1
+draccus==0.10.0
+einops>=0.8,<0.9
+gymnasium>=1.1,<2
+opencv-python-headless>=4.9,<4.14
+Pillow>=10,<13
+packaging>=24.2,<26
+termcolor>=2.4,<4
+setuptools>=71,<81
+pytest>=8,<10

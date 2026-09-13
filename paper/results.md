@@ -2,7 +2,7 @@
 
 *Working source of truth for the method, completed results, active experiments, and
 limitations. Numbers include seeds, sample sizes, pairing, and confidence intervals
-where available. Last updated: 3 September 2026.*
+where available. Last updated: 7 September 2026.*
 
 ---
 
@@ -12,10 +12,12 @@ where available. Last updated: 3 September 2026.*
 |---|---|---:|
 | Standard VLA success | LIBERO, four suites, three seeds | waypoint 82.1±1.8; fixed-time spline 80.8±2.5; spline+duration 80.7±1.3 |
 | Decode-time retiming | CALVIN, 3 seeds × 1,000 chains | **+0.379** average chain length, 95% CI [0.318, 0.441], at **1.42×** realized speed vs unretimed spline |
-| Retimed spline vs waypoint | CALVIN, same paired chains | **+0.127** average chain length, 95% CI [0.063, 0.191]; first-task success tied |
+| Historical retimed spline vs native waypoint | CALVIN, same official chains; waypoint is not retimed | **+0.127** average chain length, 95% CI [0.063, 0.191]; first-task success similar |
+| Matched retiming control | CALVIN screen, 3 seeds × 50 common chains, K=5 for all decoders | waypoint **1.52→2.02**; spline **1.21→1.77**; retiming interaction **+0.06**, hierarchical 95% interval [−0.50,+0.62] |
+| Duration-scheduled policy queries | LIBERO Object / Long, n=100/suite | success **93%/61%→93%/62%** while calls/episode fall **31.3/73.8→11.7/33.0** (2.68×/2.24× fewer) |
 | Language-commanded timing | CALVIN, n=600/condition | “quickly”/“slowly” changes decoded action magnitude by approximately +16%/−16%; quick−plain **+0.172** average chain length (`p=.018`, Bonferroni `p=.035`) |
-| Decode-time control rate | LIBERO Spatial t5 | **38%→68%** and **34%→72%** under two horizon protocols; matched waypoint **0/50** |
-| Executable language clauses | LIBERO-Long t0/t4, three seeds/head | waypoint **+34.3 pp**; spline **+43.7 pp** |
+| Decode-time control rate | LIBERO Spatial t5, within-spline comparisons | **38%→68%** and **34%→72%**; direct waypoint replay **0/50** is not an interpolation baseline |
+| Clause-aligned training | LIBERO-Long t0/t4, three seeds/head, identical scheduled clause input at inference | waypoint **+34.3 pp**; spline **+43.7 pp** |
 | Spline×language interaction | matched A/C fixed-clock factorial | **+9.33 pp**, hierarchical 95% CI **[+0.67,+18.0]** |
 | Clause-order steering | LIBERO-Long t4, exact paired replay | requested first-object flip **10/50** for both heads; zero anti-direction flips (`p=.00195`) |
 | Target-scene composite execution | RoboCasa365 | official phases: seed 1000 **4/100→16/100**; independent seed 1001 **3/40→9/40**; Rinse replication **1/20→8/20** (`p=.0197`) |
@@ -37,7 +39,25 @@ episode schedules; only the language labels differ. A frozen two-clause clock te
 whether the policy can execute the learned clauses sequentially. Static compound
 prompts test ordinary task competence without the program.
 
-| seed | waypoint A: original→clauses | spline C: original→clauses | C−A interaction |
+**Complete training-label × inference-interface factorial.** Both sides of each
+scheduled comparison receive the same clause program. The large gains are label
+effects under scheduled execution, not whole-caption-native → clause-native gains.
+All cells below pool 300 rollouts (100 per training seed).
+
+| head | training labels | static whole-caption inference | scheduled-clause inference |
+|---|---|---:|---:|
+| waypoint A | whole-task | 147/300 (49.0%) | 21/300 (7.0%) |
+| waypoint A | clauses | 119/300 (39.7%) | 124/300 (41.3%) |
+| event spline C | whole-task | 171/300 (57.0%) | 35/300 (11.7%) |
+| event spline C | clauses | 99/300 (33.0%) | 166/300 (55.3%) |
+
+Source: `outputs/language_clause_exact/locked_3seed_factorial_2327539.json`,
+`comparisons.{A,C}_{compound,fixed_clock}`. The spline retains much of native
+whole-caption competence through a programmable clause interface, and its
+training-label effect is larger than the waypoint's. The head intervention bundles
+compactness, event boundaries, and duration; it does not isolate those mechanisms.
+
+| seed | waypoint A: whole→clause training, fixed clause input | spline C: whole→clause training, fixed clause input | C−A interaction |
 |---:|---:|---:|---:|
 | 1000 | 11/100→42/100 (**+31 pp**) | 13/100→54/100 (**+41 pp**) | **+10 pp** |
 | 1001 | 7/100→37/100 (**+30 pp**) | 14/100→56/100 (**+42 pp**) | **+12 pp** |
@@ -238,7 +258,7 @@ a larger grasp-and-lift evaluation, and a matched waypoint/spline comparison.
 
 | test | result | conclusion |
 |---|---:|---|
-| Held-out event-duration calibration | MAE 1.61 steps; Pearson r=.819; event/cap balanced accuracy=.892 | learned duration predicts action-event timescale well |
+| Event-duration calibration audit, split from policy-training demonstrations | MAE 1.61 steps; Pearson r=.819; event/cap balanced accuracy=.892 | duration tracks action-event times on this diagnostic; not held-out policy generalization |
 | Three-seed clause execution with predicted action-event clock | mean **+40.33 pp** (per seed +44/+40/+37) | the policy's predicted close-to-open gripper event is a usable clause switch |
 | Action-event clock versus fixed clock on clause-trained C | 54% vs 58% (seed 1000) and 56% vs 56% (seed 1001 matched run); differences non-significant | the action-event switch is competitive, but does not replace semantic completion detection |
 
@@ -301,7 +321,7 @@ findings:
 | execution cadence, Long t8 | same n16/h48 checkpoint 30%→**52%** | one seed; paired p=.0347; spatial 81.8%→77.4% | longer execution can reduce long-horizon compounding, with a precision tradeoff |
 | decode rate, Spatial t5 | 19/50→**34/50** at 2× | matched 600/1,200-step protocol; paired p=.00408 | finer curve sampling repairs a tracking/fidelity failure |
 | decode-rate replication, Spatial t5 | 17/50→**36/50** at 2× | separate 1,000/2,000-step protocol; paired p=.000311 | direction reproduces under a second horizon protocol |
-| waypoint at 2×, Spatial t5 | **0/50** | same task/rate intervention | waypoint deltas do not provide the spline’s rate-adaptation behavior |
+| direct waypoint replay at 2×, Spatial t5 | **0/50** | same task/rate intervention, no equivalent path retiming | motivates a proper interpolation baseline; does not establish waypoint incapability |
 
 These cells reveal distinct capacity-, cadence-, and fidelity-limited failure modes.
 They do not support the previous wording that every member of one pre-registered
@@ -333,13 +353,76 @@ intrinsic headroom (α=0.6 clips only ~2% of steps), not from stretch.
 | interval retime − A | +0.021 | [−0.041, 0.083] | 0.65 | parity |
 | A − C-base | +0.252 | [0.192, 0.312] | 8.3 | un-retimed spline trails A on teleop data |
 
-**Read.** Base C trails A because it faithfully reproduces the demos' dead-time
-(hesitation). **Decode-time retiming recovers and overtakes** — *more success AND ~1.4×
+**Read.** Base C trails A; sensitivity to pauses in the demonstrations is a
+plausible explanation, not a separately isolated cause. **Decode-time retiming
+recovers and overtakes** — *more success AND ~1.4×
 faster simultaneously*, on all 3 seeds. Precise framing: the +0.38/1.42× is vs the
 spline's own base; **vs the waypoint, retimed-C improves chain depth while first-task
 success is tied.** This is the opposite sign from LIBERO (§4) and is the paper's
-strongest single result. Mechanism: 77% of the gain is *behavioral* (removing
-reproduced dithering that visits off-manifold states), only 23% clock.
+strongest timing results. In the budget diagnostic, 77% of the added solved
+subtasks also completed within a reduced 269-step budget, versus 360 originally.
+This argues against explaining the whole improvement by extra effective time,
+but is not a causal decomposition attributing 77% of the gain to dithering removal.
+
+### Matched waypoint-interpolation comparison (completed 7 September)
+
+The new comparison directly addresses whether native waypoint trajectories can
+also be retimed. Four frozen arms use the same checkpoint families and no new
+training: A-native, A-linear-interpolation at alpha 0.6, C-native, C-retimed at
+alpha 0.6. All use five issued actions per query, three native simulator steps
+per action, the 360-step subtask budget, and per-chain/subtask policy-noise seeds.
+The screen uses the first 50 of the official 1,000 chains for each of three
+training checkpoints. It is separate from the existing K=10 results above.
+
+Production interpolation denormalizes, accumulates the raw command path, linearly
+resamples, differences, and renormalizes. CPU contracts passed exact native
+identity and nonzero-mean normalization/endpoint checks (maximum error 2.24e-7).
+The two-chain A-interpolation smoke, job **2396957**, and four-arm smoke array
+**2396996** were engineering gates and are not pooled with the results. All 12
+cells of full matrix **2397013** completed. Task 0 was marked PREEMPTED during
+teardown after writing its complete result; the other 11 were marked COMPLETED.
+All result files contain 50 full official chains.
+
+| decoder | seed 1000 | seed 1001 | seed 1002 | mean |
+|---|---:|---:|---:|---:|
+| A waypoint, native | 1.42 | 1.58 | 1.56 | **1.52** |
+| A waypoint, linear retime | 1.70 | 2.20 | 2.16 | **2.02** |
+| C event spline, native | 1.22 | 1.26 | 1.16 | **1.213** |
+| C event spline, retimed | 1.90 | 1.54 | 1.88 | **1.773** |
+
+| contrast | per-seed effects | mean | hierarchical seed + paired-chain 95% interval |
+|---|---|---:|---:|
+| waypoint retiming | +0.28 / +0.62 / +0.60 | **+0.50** | **[+0.087,+0.94]** |
+| spline retiming | +0.68 / +0.28 / +0.72 | **+0.56** | **[+0.16,+1.00]** |
+| retimed spline − retimed waypoint | +0.20 / −0.66 / −0.28 | −0.247 | [−0.82,+0.307] |
+| retiming interaction | +0.40 / −0.34 / +0.12 | **+0.06** | **[−0.50,+0.62]** |
+
+The fair conclusion is that temporal resampling benefits both representations; the
+screen does not support a spline-specific retiming advantage. This strengthens the
+method boundary rather than removing the timing result: event splines additionally
+predict a duration, which supports duration-gated compression and event-scheduled
+queries. The historical 3,000-chain result remains the higher-powered estimate of
+retiming the spline itself and is not pooled with this K=5 screen.
+
+The original combined pickled-request hashes did not all match across matrix jobs
+(19--33/50 outside the first reference cell). This hash bundled robot state, scene,
+images, and text, so a stricter component audit was run instead of silently ignoring
+the disagreement. Four independent reset-probe jobs reproduce all 50 robot states,
+scene states, top and wrist images, and the exact packed policy request bit for bit
+on the probe nodes. This certifies the reset procedure but does not retroactively
+make the original matrix hashes identical. The official sequences, checkpoint hashes,
+policy-noise schedule, time budgets, and five-action query cadence also pass. A
+grouped same-node rerun, job **2423956**, was
+attempted as a final node-rendering control. All three jobs stopped before evaluation
+because the shared SmolVLM Hugging Face cache had been emptied on 6 September and
+compute nodes run offline. No partial outcomes are counted. The rerun can resume after
+the cache is restored, but the completed screen remains the current comparison.
+
+Protocol: `docs/ICRA_REVISION_PLAN_2026-09-05.md`.
+Launcher: `cluster/eval_calvin_timing_matrix.sbatch`.
+Artifacts: Misha `scratch/vla_bspline/artifacts/calvin_matched_timing_20260905/`.
+Audited summary: `outputs/calvin_matched_timing_20260905/summary_2397013_audited_2423928.json`.
+Reset certificate: `outputs/calvin_initial_state_probe_20260907/comparison_2423928.json`.
 
 **Cadence robustness.** C is replan-cadence-robust (avg_len flat across nas=5/10),
 whereas the waypoint has a narrow sweet spot (nas=50→0.52, nas=10→1.55).
@@ -550,6 +633,17 @@ maps to exactly one term (feasibility-stretch = h-controller, ease-out/protect-s
 
 ## 5b. Execution-frequency adaptation (the project's stated central motivation)
 
+**September interpretation check.** A waypoint cumulative path can also be
+resampled while preserving total commanded displacement before clipping. Direct
+replay is therefore a weaker comparator than correctly implemented interpolation.
+The legacy sweep below is retained with its original measurements, but its
+waypoint-collapse interpretation is not a general representation limitation.
+`docs/PAPER_PLAN.md` also records competitive strong-checkpoint interpolation;
+those conflicting legacy evaluations require configuration/provenance matching
+before a cross-head claim. The new manuscript retains timing as a focused claim
+and tests interpolation explicitly on CALVIN. Discrete command-difference jerk
+at different sampling rates is not physical jerk in common time units.
+
 **The representational premise, proven offline** (decode the *same* spline tokens at
 0.5×/1×/2× — fixed flow-matching noise, so only the sampling resolution changes; n=40):
 
@@ -699,7 +793,7 @@ predicts both outcomes.
 
 ---
 
-## 8. Honest limitations (reviewer-facing)
+## 8. Scope and limitations
 
 1. Base spline **trails the waypoint on human-teleop data** before retiming (CALVIN,
    RoboCasa) — mechanistically the event-fraction effect on RoboCasa (NOT fixable by
@@ -713,11 +807,9 @@ predicts both outcomes.
    rung is also substep-limited in robosuite.
    Hardware (impedance control) remains the decisive frequency venue.
 5. **Object steering fails** on redundant natural data — needs counterfactual collection.
-6. **No real-robot results yet** — all three closest works (BSP, TRI LBM, BEAST)
-   have them; ours are planned for August (cloth-fold + BSP Speed-Stacking
-   head-to-head). Mitigation until then: BSP's own hardware results validate the
-   representation class; our exposure is the timing layer, which the (δ,h,γ)
-   theory + feasibility-stretch are designed to protect.
+6. **No real-robot results yet.** A focused compositional language experiment is
+   designed for the available arm, linear base, gripper, handheld teleoperation,
+   and printed fixtures; its results will occupy approximately one manuscript page.
 
 ---
 
@@ -727,6 +819,8 @@ predicts both outcomes.
 |---|---|---|
 | **completed, primary** | three-seed LIBERO suite parity | compact-representation baseline |
 | **completed, primary** | CALVIN retiming: +0.379 chain length at 1.42× vs C-base; +0.127 vs waypoint | shape–timing factorization headline |
+| **completed, primary control** | matched CALVIN K=5 screen: A +0.50, C +0.56; retiming interaction +0.06, interval [−0.50,+0.62] | establishes waypoint interpolation as a strong baseline and localizes novelty to learned duration |
+| **completed, primary** | duration-scheduled replanning matches reference success with 2.24–2.68× fewer policy queries | learned duration is an operational event clock |
 | **completed, primary** | CALVIN kinematic-adverb control: approximately ±16%; quick−plain +0.172 | language-steerable timing |
 | **completed, primary** | exact LIBERO-Long clause program: A +34.3 pp, C +43.7 pp across three seeds; interaction +9.33 pp, CI [+0.67,+18.0] | executable-language and spline-specific head effect |
 | **completed, scoped** | reversed clause order changes t4's first completed object in 10/50 states for both heads, with zero anti-direction flips | direct language steering of execution order; final retention remains weak |
@@ -737,7 +831,7 @@ predicts both outcomes.
 | **supporting mechanism** | RoboCasa rack/drawer wrong-prompt success falls to zero for both heads | prompt sensitivity, not alternate-goal completion |
 | **preliminary team result** | Quinten’s counterfactual slot: disadvantaged slot 6.7→23–36% | motivates matched A/C grasp-and-lift steering study |
 | **smoke complete; full test pending** | leakage-free LIBERO t0+t1→held-out t7 recombination, waypoint/spline × whole/piecewise language; normal-order requested-first signal 4/4 clauses vs 0/4 whole, but 0 full conjunctions | run the frozen seen-task competence gate before the 50-state held-out test |
-| **designed, awaiting hardware details** | three-task real-robot compositional study; P1 is held-out two-object kitting | transfers recombination/alignment and decode-time control to hardware |
+| **trained and offline verified; physical trials pending** | task-specific cabinet/drawer waypoint and spline models, 20k updates each; five held-out demonstrations/task (§10) | establishes the hardware deployment baseline; language intervention needs phase/order annotations and new physical trials |
 
 Historical ClangMix, Hard-5 top-ups, co-scaling runs, and composite fleets are
 retained as exploratory evidence and failure-directed discovery. Their checkpoints,
@@ -750,3 +844,137 @@ raw counterfactual artifacts are not in this workspace; RoboCasa fixed-clock pha
 support is unequal across training seeds (50 versus 20 target scenes/task) and Kettle
 does not repeat on seed 1001; the completion-oracle pilot is smaller; and
 decode-rate gains are task-selective rather than universal.
+
+---
+
+## 10. Hardware policy training and offline validation
+
+**September 12, 2026.** All four task-specific hardware policies have completed
+20k updates and passed offline prediction checks; the last finished at 04:23 EDT. This section
+records training and offline command agreement, not real-robot task success.
+
+Two native Apollo datasets contain 50 cabinet-assembly demonstrations and 51
+drawer-assembly demonstrations. All 202 camera videos were decoded and all
+action/state rows checked. One cabinet episode was quarantined after a single
+EE-pose reading jumped approximately 47 cm in 40 ms despite continuous joints,
+commands, and video. The raw data are preserved. Training uses 44 cabinet and
+46 drawer episodes, with five fixed whole episodes per task held out.
+
+Each task has a separately fine-tuned SmolVLA waypoint and event-spline policy,
+initialized from the same `lerobot/smolvla_base` revision and trained for 20k
+updates, batch 32, seed 1000. Inputs are two RGB cameras, native 32-value state,
+and the recorded whole-task caption. The spline head uses eight cubic control
+points, a learned 8–24-frame duration, and an analog [0,1] gripper decoder. Both
+heads expose the native 16-command interface and execute at most eight actions
+before replanning at a nominal 25 Hz. The camera arm and rails stay parked.
+
+The fixed offline check samples ten observations from each of five held-out
+episodes. Lower error is better. Cumulative translation RMSE compares the sum
+of eight predicted delta commands against recorded commands, averaged over xyz
+components; it is **not physical endpoint tracking error**.
+
+| Task | Model | Per-step translation RMSE (mm) | Eight-step cumulative translation RMSE (mm) | Gripper opening MAE |
+|---|---|---:|---:|---:|
+| Cabinet | Zero motion / hold gripper reference | 1.268 | 9.290 | 0.0854 |
+| Cabinet | Event spline, 20k | 0.892 | 5.486 | 0.0572 |
+| Cabinet | Waypoint, 20k | 0.819 | 4.211 | 0.0612 |
+| Drawer | Zero motion / hold gripper reference | 1.565 | 11.453 | 0.1097 |
+| Drawer | Event spline, 20k | 1.198 | 7.105 | 0.0408 |
+| Drawer | Waypoint, 20k | 1.286 | 7.686 | 0.0401 |
+
+All four completed checkpoints passed strict reload, two-camera preprocessing,
+finite 16-channel prediction, and inactive-arm output checks. A copied spline
+smoke bundle also passed with the archived source and included tokenizer/config
+cache in Hugging Face offline mode. No robot has been moved by this workflow.
+The present demonstrations have one fixed whole-task caption and no executable
+phase labels: they do not yet test hardware clause generalization or retiming.
+All four models improve translation and gripper agreement over the reference.
+The head comparison is mixed: spline has lower translation error on drawer,
+waypoint on cabinet; spline gripper error is lower on cabinet and nearly equal
+on drawer. These offline checks do not establish either head's physical success
+rate or a general hardware advantage.
+Methodology, exact paths, hashes, and job IDs are recorded in
+`docs/HARDWARE_TRAINING_2026-09-12.md` and
+`cluster/launch_records/hardware_20260912.md`.
+
+### 10.1 Lab inference integration
+
+September 12 evening: all four checkpoints were transferred with matching hashes
+to an isolated environment on the Apollo workstation. A source audit found that
+the recordings use older SDK-flange observation features whereas live Dora now
+publishes corrected TCP features. An observation-only adapter preserves the
+trained interface; native action targets are unchanged. Its comparison spans
+103,346 recorded frames, and all four stabilized fixture round trips preserve
+lab-GPU predictions exactly. The isolated adapter/transport suite passes 128 tests.
+
+The drawer spline produced five finite action prefixes from live real-camera and
+robot-state streams (202–236 ms per prediction; median 211 ms). A separate 20 s
+shadow attachment received 1,171 real RGB frames with no frame errors; Apollo
+recognized the policy as driving only the manipulation arm. A subsequent approved
+shadow hardware session at 10% speed encountered a parked-state compatibility
+refusal and a controller-not-ready startup fault; it was closed without a
+return-home request. No learned action was sent in that initial check. Controller enabling changed reported posture
+and should not be described as a no-motion validation. These are integration
+checks, not hardware success results. A subsequent zero-variance-input ablation
+preserves both drawer fixtures exactly and produces five fresh finite predictions
+in a read-only observer (196–217 ms); its diagnostic mode cannot publish actions,
+and execution readiness has not been established. After Studio was closed, two
+approved 15-second controller-enabled shadow checks each produced 45 predictions,
+with no reported faults and zero actions sent (median latency 212 / 214 ms).
+The operator observed a small startup jerk and confirmed it is expected on this
+setup; both sessions were closed without return-home. A session-local input
+calibration now separates monitoring of parked hardware from constant training
+features. After fixing an overly broad stationarity check on the active gripper,
+it passed a live hold with 34 predictions (median 208 ms), no reported faults, and
+no learned actions. A quaternion-sign discontinuity was also isolated: choosing
+the equivalent orientation representation near the training mean removes extreme
+normalized inputs while preserving earlier drawer fixtures and predictions.
+This correction was subsequently used in learned hardware movements.
+
+| Supervised motion test | Command and measured response | Outcome |
+|---|---|---|
+| Native single-row test (trial 008) | Requested translation norm 0.772 mm; measured 0.565 mm; gripper target 0.85883, measured 0.85714 | No reported fault; view arm and rails unchanged during execution |
+| Three-step closed-loop test (trial 010) | Three two-row prefixes; requested translation path 4.738 mm, measured net TCP displacement 2.146 mm; gripper 0.96429→0.97619 | No reported fault in 171 running telemetry frames; view arm and rails unchanged; synchronized camera frames inspected |
+| Short slow-clock approach (trial 012) | Three eight-row chunks at 200 ms/row; requested net xyz [−1.313, −42.524, −7.531] mm; measured [−0.657, −37.926, −7.006] mm | 24 rows executed, no reported fault; view arm/rails unchanged |
+| Sustained slow-clock approach (trial 013) | Six eight-row chunks; requested path 148.388 mm; measured net descent 126.215 mm toward the drawer | 48 rows executed, no reported fault; automatic stop when requested gripper closure exceeded approach allowance |
+
+An earlier single-row test exposed a client wire-rate mismatch: the external
+source's delta scaling combined with its row-consumption budget amplified intended
+deltas when the 3.125 Hz model-call rate was advertised as the action rate. The
+client now advertises native 25 Hz action rows while capping inference separately
+at 3.125 Hz. Pure-method replay of the exact production source confirms corrected
+delta bookkeeping; no runtime/driver changes were made. Trial 006 is retained as
+that diagnosis, not native tracking validation. Trial 009 correctly refused an
+eight-row prefix before publication because its 19.38 mm proposed path exceeded
+the 10 mm commissioning limit. Physical motion is additionally affected by the
+executor's IK and command limits; the session speed field alone does not establish
+uniform 10% policy speed.
+
+The live log identifies 0.04 m/s TCP and 0.06 rad/s joint caps. A slow execution
+mode uses the same predicted increments at 200 ms per row, advertises a matching
+5 Hz wire rate, and limits fresh model predictions to 0.625 Hz while monitoring
+parked state at the original callback rate. Pure-source replay verifies unchanged
+integrated delta bookkeeping. This enabled a sustained approach without changing
+the driver or its limits. Native and slow commissioning trials used different
+starting observations and predictions; they are not a matched timing ablation.
+Gripper response also needs validation: the latest readout remained at 0.976
+despite targets down to 0.884 during that approach. A grasp has not been established.
+In a separate deterministic diagnostic (trial 014, not a learned policy), one
+gripper target reduced requested opening by 6.72 mm while all pose/rail increments
+were zero. Dora accepted the action, but measured opening remained 0.97619 rather
+than the requested 0.89619 over the three-second observation window. Trial 015
+repeated the same fixed opening target in three eight-row chunks, with no
+measured closure or pose/rail movement during the response window. Both sessions
+were closed without return-home. This narrows the immediate deployment problem to
+the gripper response path, rather than establishing an insertion-policy failure.
+
+**No grasp, insertion, or full hardware task completion has been demonstrated.**
+These tests establish live inference and bounded learned motion, not hardware
+success rates. The operator confirmed clearance from the knobs; reliable gripper
+response remains required before continuing toward contact. Shared-runtime setup
+warnings and diagnostic limitations are recorded in the integration document.
+The tight H200/4090 fixture comparison
+still flags both drawer models; the largest translation-component difference is
+0.0109 mm per row for spline and 0.4808 mm for waypoint. Full details, retained
+comparison reports, and the supervised commissioning plan are in
+`docs/HARDWARE_INFERENCE_2026-09-12.md`.
