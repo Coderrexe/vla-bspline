@@ -1,0 +1,184 @@
+{
+  "updated": "2026-09-26",
+  "language": {
+    "rows": [
+      {
+        "head": "Waypoint",
+        "before": 21,
+        "after": 124,
+        "n": 300,
+        "gain": 34.333333333333336,
+        "seeds": [
+          {
+            "clause_minus_original": 0.31,
+            "clause_successes": 42,
+            "discordant_clause_only": 35,
+            "discordant_original_only": 4,
+            "exact_mcnemar_pvalue": 3.353161446284503e-07,
+            "n": 100,
+            "original_successes": 11,
+            "seed": 1000
+          },
+          {
+            "clause_minus_original": 0.3,
+            "clause_successes": 37,
+            "discordant_clause_only": 35,
+            "discordant_original_only": 5,
+            "exact_mcnemar_pvalue": 1.382612026645802e-06,
+            "n": 100,
+            "original_successes": 7,
+            "seed": 1001
+          },
+          {
+            "clause_minus_original": 0.42,
+            "clause_successes": 45,
+            "discordant_clause_only": 42,
+            "discordant_original_only": 0,
+            "exact_mcnemar_pvalue": 4.547473508864641e-13,
+            "n": 100,
+            "original_successes": 3,
+            "seed": 1002
+          }
+        ]
+      },
+      {
+        "head": "Event spline",
+        "before": 35,
+        "after": 166,
+        "n": 300,
+        "gain": 43.66666666666667,
+        "seeds": [
+          {
+            "clause_minus_original": 0.41,
+            "clause_successes": 54,
+            "discordant_clause_only": 47,
+            "discordant_original_only": 6,
+            "exact_mcnemar_pvalue": 5.805322444984995e-09,
+            "n": 100,
+            "original_successes": 13,
+            "seed": 1000
+          },
+          {
+            "clause_minus_original": 0.42,
+            "clause_successes": 56,
+            "discordant_clause_only": 43,
+            "discordant_original_only": 1,
+            "exact_mcnemar_pvalue": 5.115907697472721e-12,
+            "n": 100,
+            "original_successes": 14,
+            "seed": 1001
+          },
+          {
+            "clause_minus_original": 0.48,
+            "clause_successes": 56,
+            "discordant_clause_only": 50,
+            "discordant_original_only": 2,
+            "exact_mcnemar_pvalue": 6.123990203832363e-13,
+            "n": 100,
+            "original_successes": 8,
+            "seed": 1002
+          }
+        ]
+      }
+    ],
+    "interaction_pp": 9.333333333333334,
+    "interaction_ci": [
+      0.6666666666666667,
+      18.000000000000004
+    ],
+    "protocol": "LIBERO-Long t0/t4. Three training seeds; 100 rollouts per seed and condition. Identical fixed clause schedule at inference. Only training language labels change within each head.",
+    "source": "paper/results.md#executable-language-programs-on-libero-long"
+  },
+  "calvin": {
+    "native": 1.3113333333333335,
+    "retimed": 1.6906666666666663,
+    "pace": 1.416,
+    "delta": 0.3793,
+    "native_seeds": [
+      1.422,
+      1.239,
+      1.273
+    ],
+    "retimed_seeds": [
+      1.734,
+      1.579,
+      1.759
+    ],
+    "source": "paper/results.md#2-calvin-human-teleop-dead-time-rich--the-flagship"
+  },
+  "robocasa": {
+    "rows": [
+      {
+        "seed": 1000,
+        "kettle": [
+          2,
+          6,
+          50
+        ],
+        "rinse": [
+          2,
+          10,
+          50
+        ],
+        "before": 4,
+        "after": 16,
+        "n": 100
+      },
+      {
+        "seed": 1001,
+        "kettle": [
+          2,
+          1,
+          20
+        ],
+        "rinse": [
+          1,
+          8,
+          20
+        ],
+        "before": 3,
+        "after": 9,
+        "n": 40
+      }
+    ],
+    "source": "paper/results.md#robocasa365-target-scene-execution-and-language-steering"
+  },
+  "queries": {
+    "rows": [
+      {
+        "suite": "LIBERO Object",
+        "before": 31.3,
+        "after": 11.7,
+        "success_before": 93,
+        "success_after": 93
+      },
+      {
+        "suite": "LIBERO Long",
+        "before": 73.8,
+        "after": 33.0,
+        "success_before": 61,
+        "success_after": 62
+      }
+    ],
+    "n": 100,
+    "source": "docs/RESULTS.md"
+  },
+  "evidence_sources": [
+    {
+      "path": "outputs/language_clause_exact/locked_3seed_factorial_2327539.json",
+      "sha256": "55082590730a860660de8f80b732ef6dbee83ceec53e51fc722b97bd685a61a5"
+    },
+    {
+      "path": "scripts/figures/data/calvin_seeded_final.json",
+      "sha256": "160f5d01050334de5868caf1a7d63f12af0742426d328b88bf139652b5c62a0b"
+    },
+    {
+      "path": "outputs/robocasa_confirm_n40/official_phase_50scene_stats.json",
+      "sha256": "1e5fc91160cb7bc95601fa49d11fc94b2836658f5c076e630295398d92086877"
+    },
+    {
+      "path": "paper/results.md",
+      "sha256": "7f74b94aa3393606ac1e29dee5e7f69da5c83e06a232b4bfb688a485ab11ad2d"
+    }
+  ]
+}

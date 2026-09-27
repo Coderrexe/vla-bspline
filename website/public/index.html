@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6f5ef" />
+    <title>VLA B-Spline — Language in steps. Motion in curves.</title>
+    <meta
+      name="description"
+      content="Event-aligned B-spline action programs for vision-language-action robot policies. Executable language, continuous motion, and a controllable physical clock. By Simba Shi, Quinten Jin, and Xiatao Sun, in collaboration with Yale APOLLO Lab."
+    />
+    <meta name="author" content="Simba Shi, Quinten Jin, Xiatao Sun" />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:title"
+      content="VLA B-Spline — Language in steps. Motion in curves."
+    />
+    <meta
+      property="og:description"
+      content="A compact action interface for language-guided robot learning. Explore real policy rollouts, replicated results, and an interactive spline decoder."
+    />
+    <meta property="og:url" content="https://vla-bspline.vercel.app/" />
+    <meta
+      property="og:image"
+      content="https://vla-bspline.vercel.app/media/social.jpg"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:image"
+      content="https://vla-bspline.vercel.app/media/social.jpg"
+    />
+    <link rel="canonical" href="https://vla-bspline.vercel.app/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link
+      rel="preload"
+      href="/fonts/instrument-serif.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/dm-sans-regular.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/main.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="#" aria-label="VLA B-Spline home"
+        ><img src="/favicon.svg" width="27" height="27" alt="" /><span
+          >VLA B-Spline<span class="brand-dot">.</span></span
+        ></a
+      >
+      <nav aria-label="Main navigation">
+        <a href="#demos">In motion</a><a href="#method">The idea</a
+        ><a href="#results">Results</a><a href="#hardware">In the lab</a>
+      </nav>
+      <a
+        class="nav-code"
+        href="https://github.com/Coderrexe/vla-bspline"
+        target="_blank"
+        rel="noopener noreferrer"
+        >View code <span aria-hidden="true">↗</span></a
+      >
+    </header>
+
+    <main id="main">
+      <section class="hero wrap" aria-labelledby="hero-heading">
+        <div class="hero-copy">
+          <p class="eyebrow">
+            <span class="live-dot"></span> A ROBOT LEARNING RESEARCH PROJECT
+          </p>
+          <h1 id="hero-heading">
+            Language in steps.<br />
+            Motion in <em>curves.</em>
+          </h1>
+          <p class="hero-description">
+            Give a robot the next instruction.<br />
+            Let it learn the motion. Keep control of the clock.
+          </p>
+          <p class="hero-explainer">
+            VLA B-Spline turns vision and language into compact, continuous
+            action programs: eight spline tokens, an explicit duration, and a
+            sequence of executable language clauses.
+          </p>
+          <div class="hero-authors">
+            <a href="https://www.simbashi.com/">Simba Shi</a
+            ><span>Quinten Jin</span
+            ><a href="https://sunxiatao.me/">Xiatao Sun</a>
+          </div>
+          <p class="affiliation">
+            In collaboration with
+            <a href="https://apollo-lab-yale.github.io/"
+              >Yale APOLLO Lab <span aria-hidden="true">↗</span></a
+            >
+          </p>
+          <div class="hero-actions">
+            <a class="button dark" href="#demos"
+              >Watch the policies <span aria-hidden="true">↓</span></a
+            ><a class="text-link" href="#method"
+              >Explore the method <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <p class="hero-status">Ongoing research · SmolVLA / LeRobot · 2026</p>
+        </div>
+        <div class="hero-film">
+          <div class="film-topline">
+            <span><span class="record-dot"></span> ROBOCASA365</span
+            ><span>LEARNED POLICY</span>
+          </div>
+          <div class="hero-video-layout">
+            <video
+              id="hero-video"
+              muted
+              loop
+              playsinline
+              preload="metadata"
+              poster="/media/kettle-start.webp"
+              aria-label="Selected successful learned policy rollout: pick up a kettle, place it on a stove, and turn on the burner"
+            >
+              <source src="/media/kettle.mp4" type="video/mp4" />
+            </video>
+            <div class="program-list" aria-label="Language program">
+              <span class="tiny-label">THE PROGRAM</span>
+              <div class="program-step is-active" data-phase="0">
+                <span class="phase-number">01</span
+                ><span
+                  >Pick up<br />
+                  the kettle.</span
+                >
+              </div>
+              <div class="program-step" data-phase="1">
+                <span class="phase-number">02</span
+                ><span
+                  >Place it on<br />
+                  the burner.</span
+                >
+              </div>
+              <div class="program-step" data-phase="2">
+                <span class="phase-number">03</span
+                ><span
+                  >Turn on<br />
+                  the burner.</span
+                >
+              </div>
+              <span class="program-foot"
+                >ONE CLAUSE<br />
+                AT A TIME</span
+              >
+            </div>
+          </div>
+          <div class="film-footer">
+            <span
+              >KettleBoiling <span class="separator">/</span> scene 1011</span
+            ><button
+              id="hero-play"
+              class="film-toggle"
+              aria-label="Play hero video"
+            >
+              Play <span aria-hidden="true">▶</span>
+            </button>
+          </div>
+          <p class="film-caption">
+            A selected successful simulation rollout. Clause highlights follow
+            the recorded switch steps; wording is shortened for display.
+          </p>
+          <svg class="hero-spline" viewBox="0 0 500 66" aria-hidden="true">
+            <path
+              d="M0 48C45 48 58 9 114 9S192 62 250 47 323 12 380 27 436 63 500 15"
+            />
+            <circle cx="114" cy="9" r="4" />
+            <circle cx="250" cy="47" r="4" />
+            <circle cx="380" cy="27" r="4" />
+          </svg>
+        </div>
+      </section>
+
+      <section class="metrics wrap" aria-label="Selected research results">
+        <div class="metric">
+          <p class="metric-number">+43.7<span>pp</span></p>
+          <h2>Better clause execution</h2>
+          <p>
+            LIBERO-Long t0/t4, three training seeds.<br />
+            11.7% → 55.3% under the same clause schedule.
+          </p>
+          <a href="#results"
+            >See the controlled comparison <span aria-hidden="true">↗</span></a
+          >
+        </div>
+        <div class="metric">
+          <p class="metric-number">1.42<span>×</span></p>
+          <h2>Faster, with deeper task chains</h2>
+          <p>
+            CALVIN, 3,000 chains per condition.<br />
+            +0.379 mean chain length vs. native spline.
+          </p>
+          <a href="#results" data-result-link="clock"
+            >See the timing study <span aria-hidden="true">↗</span></a
+          >
+        </div>
+        <div class="metric">
+          <p class="metric-number">2.68<span>×</span></p>
+          <h2>Fewer policy queries</h2>
+          <p>
+            LIBERO Object, 100 episodes per condition.<br />
+            93% success with 31.3 → 11.7 calls per episode.
+          </p>
+          <a href="#results" data-result-link="queries"
+            >See the compute tradeoff <span aria-hidden="true">↗</span></a
+          >
+        </div>
+      </section>
+
+      <div class="benchmark-strip wrap">
+        <span class="tiny-label">EVALUATED IN</span><span>LIBERO</span
+        ><span>CALVIN</span><span>RoboCasa365</span
+        ><span class="strip-end"
+          >Built on <a href="https://huggingface.co/blog/smolvla">SmolVLA</a> +
+          <a href="https://github.com/huggingface/lerobot">LeRobot</a></span
+        >
+      </div>
+
+      <section id="demos" class="section wrap" aria-labelledby="demos-heading">
+        <div class="section-heading">
+          <p class="section-index">01 / IN MOTION</p>
+          <div>
+            <h2 id="demos-heading">
+              The right action.<br />
+              <em>At the right phase.</em>
+            </h2>
+            <p>
+              Long tasks can fail after the robot has already done the hard
+              part. In this scene, both policies pick up and place the kettle.
+              Learning the executable phases helps the robot move on to the
+              burner.
+            </p>
+          </div>
+        </div>
+        <div class="demo-toolbar">
+          <div
+            class="segmented"
+            role="tablist"
+            aria-label="Select a rollout comparison"
+          >
+            <button
+              id="demo-tab-kettle"
+              role="tab"
+              aria-selected="true"
+              aria-controls="demo-panel"
+              data-demo="kettle"
+            >
+              Kettle boiling</button
+            ><button
+              id="demo-tab-rinse"
+              role="tab"
+              aria-selected="false"
+              aria-controls="demo-panel"
+              tabindex="-1"
+              data-demo="rinse"
+            >
+              Rinsing the basin
+            </button>
+          </div>
+          <span class="comparison-note"
+            >Same initial scene · same inference clauses</span
+          >
+        </div>
+        <div
+          id="demo-panel"
+          class="comparison"
+          role="tabpanel"
+          aria-labelledby="demo-tab-kettle"
+        >
+          <figure>
+            <div class="comparison-label">
+              <span class="tag muted-tag">WHOLE-TASK TRAINING LABELS</span
+              ><span id="baseline-outcome">Task incomplete</span>
+            </div>
+            <video
+              id="baseline-video"
+              muted
+              playsinline
+              preload="none"
+              poster="/media/kettle-baseline.webp"
+              aria-label="Original training labels, paired baseline rollout"
+            >
+              <source src="/media/kettle-baseline.mp4" type="video/mp4" />
+            </video>
+            <figcaption id="baseline-caption">
+              Places the kettle, but does not complete burner actuation within
+              1,500 steps.
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="comparison-label">
+              <span class="tag green-tag">OFFICIAL PHASE TRAINING LABELS</span
+              ><span id="phase-outcome" class="success">Task complete ✓</span>
+            </div>
+            <video
+              id="phase-video"
+              muted
+              playsinline
+              preload="none"
+              poster="/media/kettle.webp"
+              aria-label="Official phase training labels, paired successful rollout"
+            >
+              <source src="/media/kettle.mp4" type="video/mp4" />
+            </video>
+            <figcaption id="phase-caption">
+              Completes the pick → place → burner sequence in 516 steps.
+            </figcaption>
+          </figure>
+        </div>
+        <div class="compare-controls">
+          <button class="button small" id="comparison-play">
+            Play comparison <span aria-hidden="true">▶</span></button
+          ><button
+            class="icon-button"
+            id="comparison-restart"
+            aria-label="Restart both comparison videos"
+          >
+            ↺</button
+          ><label class="sr-only" for="comparison-scrub"
+            >Comparison playback position</label
+          ><input
+            type="range"
+            id="comparison-scrub"
+            min="0"
+            max="100"
+            value="0"
+            step="0.1"
+          /><span class="video-clock" id="comparison-time">0:00 / 1:15</span
+          ><label class="speed-label"
+            >Playback
+            <select
+              id="comparison-speed"
+              aria-label="Comparison playback speed"
+            >
+              <option value="1">1×</option>
+              <option value="2" selected>2×</option>
+              <option value="4">4×</option>
+            </select></label
+          >
+        </div>
+        <p class="caption" id="demo-protocol">
+          Selected paired scene 1011, training seed 1000. Identical initial
+          observation hash; identical fixed clause switch steps (128, 242).
+          Videos record every five simulation steps at 4 fps. The successful
+          rollout holds its final frame while the baseline continues.
+        </p>
+        <div class="demo-bottom">
+          <div>
+            <h3>Beyond a single rollout</h3>
+            <p>
+              Across KettleBoiling and RinseSinkBasin, official phase labels
+              improve aggregate completion in both training seeds. The Rinse
+              effect repeats strongly; Kettle varies between seeds.
+            </p>
+            <a
+              class="text-link"
+              href="https://github.com/Coderrexe/vla-bspline/blob/main/paper/results.md#robocasa365-target-scene-execution-and-language-steering"
+              >Full protocol and task breakdown
+              <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <div class="compact-table">
+            <table>
+              <caption>
+                Two-task aggregate · original → phase labels
+              </caption>
+              <thead>
+                <tr>
+                  <th>Training seed</th>
+                  <th>Successes</th>
+                  <th>Gain</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>1000</td>
+                  <td>4/100 → <strong>16/100</strong></td>
+                  <td>+12 pp</td>
+                </tr>
+                <tr>
+                  <td>1001</td>
+                  <td>3/40 → <strong>9/40</strong></td>
+                  <td>+15 pp</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="method"
+        class="method-section"
+        aria-labelledby="method-heading"
+      >
+        <div class="wrap section">
+          <div class="section-heading">
+            <p class="section-index">02 / THE REPRESENTATION</p>
+            <div>
+              <h2 id="method-heading">
+                A small program.<br />
+                <em>Two kinds of control.</em>
+              </h2>
+              <p>
+                Language chooses the active subgoal. A spline specifies a short
+                motion segment. Its predicted duration gives the decoder an
+                explicit clock.
+              </p>
+            </div>
+          </div>
+          <div class="architecture">
+            <div class="architecture-part">
+              <span class="step-label">01 / CONDITION</span>
+              <div class="input-line">
+                <span class="input-dot"></span>Images + robot state
+              </div>
+              <div class="clause-input">“Place the kettle on the burner.”</div>
+              <p>
+                The active clause enters the original vision–language backbone.
+              </p>
+            </div>
+            <span class="arch-arrow" aria-hidden="true">→</span>
+            <div class="architecture-part">
+              <span class="step-label">02 / PREDICT</span>
+              <div
+                class="token-strip"
+                role="img"
+                aria-label="Eight spline tokens"
+              >
+                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              </div>
+              <div class="token-caption">
+                <strong>8 control tokens</strong
+                ><span>+ gripper + duration</span>
+              </div>
+              <p>The flow-matching expert predicts an event-aligned segment.</p>
+            </div>
+            <span class="arch-arrow" aria-hidden="true">→</span>
+            <div class="architecture-part">
+              <span class="step-label">03 / EXECUTE</span
+              ><svg
+                viewBox="0 0 240 52"
+                class="decode-curve"
+                aria-label="A continuous curve sampled into actions"
+              >
+                <path d="M4 42C36 42 40 8 75 10S110 48 145 31 185 12 232 19" />
+                <g>
+                  <circle cx="4" cy="42" r="3" />
+                  <circle cx="75" cy="10" r="3" />
+                  <circle cx="145" cy="31" r="3" />
+                  <circle cx="232" cy="19" r="3" />
+                </g>
+              </svg>
+              <div class="token-caption">
+                <strong>Continuous path</strong
+                ><span>adjustable pace &amp; rate</span>
+              </div>
+              <p>
+                Sample the curve, issue bounded actions, observe, and replan.
+              </p>
+            </div>
+          </div>
+          <div class="explorer" aria-labelledby="explorer-heading">
+            <div class="explorer-copy">
+              <p class="eyebrow">TRY THE DECODER</p>
+              <h3 id="explorer-heading">
+                One curve.<br />
+                <em>Your clock.</em>
+              </h3>
+              <p>
+                Change the duration or control rate. The predicted path and its
+                endpoint stay fixed; the action spacing and execution time
+                respond.
+              </p>
+              <p class="small-note">
+                Interactive 2D illustration of the decoder, not a robot rollout.
+                Tracking and clipping can change the realized motion.
+              </p>
+            </div>
+            <div class="explorer-canvas">
+              <div class="plot-top">
+                <span class="tiny-label">CUBIC B-SPLINE / 8 CONTROLS</span
+                ><button
+                  id="motion-toggle"
+                  class="subtle-button"
+                  aria-label="Pause spline animation"
+                >
+                  Pause animation
+                </button>
+              </div>
+              <svg
+                id="spline-plot"
+                viewBox="0 0 640 330"
+                role="img"
+                aria-labelledby="spline-title spline-description"
+              >
+                <title id="spline-title">
+                  Continuous motion path with adjustable sampling
+                </title>
+                <desc id="spline-description">
+                  A synthetic cubic B-spline. Small circles show issued samples;
+                  hollow circles show the eight control points.
+                </desc>
+                <defs>
+                  <pattern
+                    id="grid"
+                    width="40"
+                    height="40"
+                    patternUnits="userSpaceOnUse"
+                  >
+                    <path
+                      d="M40 0H0V40"
+                      fill="none"
+                      stroke="#dfe4d8"
+                      stroke-width="0.65"
+                    />
+                  </pattern>
+                </defs>
+                <rect width="640" height="330" fill="url(#grid)" />
+                <path id="control-polygon" />
+                <path id="spline-path" />
+                <g id="control-points"></g>
+                <g id="sample-points"></g>
+                <circle id="spline-bead-halo" r="12" />
+                <circle id="spline-bead" r="5" />
+                <text x="38" y="287" class="plot-label">START</text>
+                <text x="534" y="88" class="plot-label">END</text>
+              </svg>
+              <div class="explorer-stats">
+                <span
+                  ><strong id="duration-stat">1.20 s</strong> execution
+                  time</span
+                ><span
+                  ><strong id="samples-stat">24</strong> action samples</span
+                ><span><strong>Same</strong> endpoint</span>
+              </div>
+            </div>
+            <div class="explorer-controls">
+              <div>
+                <label for="duration-control"
+                  >Duration multiplier
+                  <output id="duration-label" for="duration-control"
+                    >1.00×</output
+                  ></label
+                ><input
+                  id="duration-control"
+                  type="range"
+                  min="0.5"
+                  max="1.5"
+                  step="0.05"
+                  value="1"
+                />
+                <div class="range-ends">
+                  <span>Faster</span><span>Slower</span>
+                </div>
+              </div>
+              <fieldset>
+                <legend>Control rate</legend>
+                <div class="rate-options">
+                  <label
+                    ><input type="radio" name="rate" value="0.5" /><span
+                      >10 Hz</span
+                    ></label
+                  ><label
+                    ><input type="radio" name="rate" value="1" checked /><span
+                      >20 Hz</span
+                    ></label
+                  ><label
+                    ><input type="radio" name="rate" value="2" /><span
+                      >40 Hz</span
+                    ></label
+                  >
+                </div>
+              </fieldset>
+              <div class="explorer-equation">
+                <span class="tiny-label">DECODE RULE</span
+                ><code>h = round(α · ρ · T̂)</code
+                ><span>duration × rate ratio × predicted horizon</span>
+              </div>
+            </div>
+          </div>
+          <details class="technical-detail">
+            <summary>
+              The mathematics, without the hand-waving
+              <span aria-hidden="true">+</span>
+            </summary>
+            <div class="technical-grid">
+              <div>
+                <h4>Shape in command space</h4>
+                <p>
+                  Accumulate pose-delta commands into a path and fit a clamped
+                  cubic B-spline, <code>p(u) = Σ Bᵢ,₃(u)cᵢ</code>. The training
+                  fit pins both endpoints. Inference predicts eight controls per
+                  segment, a gripper curve, and log duration.
+                </p>
+              </div>
+              <div>
+                <h4>Events, not arbitrary windows</h4>
+                <p>
+                  Segments end at a gripper transition, a pause, or a horizon
+                  cap. A language clause can span multiple segments. Duration
+                  predicts a motion event or cap; it is not a semantic
+                  completion detector.
+                </p>
+              </div>
+              <div>
+                <h4>A physical clock</h4>
+                <p>
+                  Decode <code>h</code> actions by differencing the sampled
+                  path. Duration scale α changes pace; rate ratio ρ changes
+                  sampling density. The predicted endpoint is preserved before
+                  actuator clipping.
+                </p>
+              </div>
+              <div>
+                <h4>The right baseline matters</h4>
+                <p>
+                  Waypoint paths can also be interpolated. Our matched CALVIN
+                  screen finds that retiming helps both heads. The spline
+                  interface additionally learns event duration and supports
+                  duration-scheduled replanning.
+                </p>
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section
+        id="results"
+        class="section wrap"
+        aria-labelledby="results-heading"
+      >
+        <div class="section-heading">
+          <p class="section-index">03 / THE EVIDENCE</p>
+          <div>
+            <h2 id="results-heading">
+              Measured behavior.<br />
+              <em>Across seeds and tasks.</em>
+            </h2>
+            <p>
+              Controlled label interventions, paired rollouts, and explicit
+              timing baselines make each result interpretable.
+            </p>
+          </div>
+        </div>
+        <div class="results-tabs" role="tablist" aria-label="Research result">
+          <button
+            id="tab-language"
+            role="tab"
+            aria-selected="true"
+            aria-controls="result-panel"
+            data-result="language"
+          >
+            Language programs <span>01</span></button
+          ><button
+            id="tab-clock"
+            role="tab"
+            aria-selected="false"
+            aria-controls="result-panel"
+            tabindex="-1"
+            data-result="clock"
+          >
+            Physical clock <span>02</span></button
+          ><button
+            id="tab-queries"
+            role="tab"
+            aria-selected="false"
+            aria-controls="result-panel"
+            tabindex="-1"
+            data-result="queries"
+          >
+            Policy queries <span>03</span>
+          </button>
+        </div>
+        <div
+          id="result-panel"
+          role="tabpanel"
+          aria-labelledby="tab-language"
+          class="result-panel"
+        >
+          <div class="result-copy">
+            <span class="eyebrow" id="result-kicker"
+              >LIBERO-LONG / T0 + T4</span
+            >
+            <h3 id="result-title">
+              Clauses help both heads.<br />
+              The spline head benefits more.
+            </h3>
+            <p id="result-description">
+              With identical clause inputs at inference, changing training
+              labels improves waypoint success by 34.3 points and spline success
+              by 43.7 points.
+            </p>
+            <div class="result-highlight">
+              <strong id="result-value">+9.33 pp</strong
+              ><span id="result-value-label"
+                >spline × language interaction</span
+              >
+            </div>
+            <p class="small-note" id="result-note">
+              Positive on all three seeds. Hierarchical 95% CI: [+0.67, +18.0]
+              pp. This compares training labels under a fixed clause schedule,
+              not whole-caption inference against clause inference.
+            </p>
+          </div>
+          <div id="result-chart" class="result-chart">
+            <img
+              src="/media/clause-results.svg"
+              alt="Clause training improves waypoint success by 31, 30 and 42 points; event spline success by 41, 42 and 48 points across three seeds."
+              width="1200"
+              height="460"
+            />
+          </div>
+        </div>
+        <div class="result-bottom">
+          <p id="result-protocol">
+            Three training seeds · 100 rollouts per seed and condition · 71
+            shared demonstrations
+          </p>
+          <a
+            id="result-source"
+            href="https://github.com/Coderrexe/vla-bspline/blob/main/paper/results.md#executable-language-programs-on-libero-long"
+            >Experimental details <span aria-hidden="true">↗</span></a
+          ><button id="download-results" class="text-link">
+            Download numbers <span aria-hidden="true">↓</span>
+          </button>
+        </div>
+        <details class="technical-detail">
+          <summary>
+            More of the research <span aria-hidden="true">+</span>
+          </summary>
+          <div class="further-results">
+            <article>
+              <span class="tiny-label">LANGUAGE STEERING</span>
+              <h4>Changing the requested order changes behavior.</h4>
+              <p>
+                Reversing the clauses changes the first completed object in
+                10/50 paired mug-task states for each head, with zero flips in
+                the opposite direction. This diagnostic uses a privileged
+                completion predicate; full reversed-task success remains lower.
+              </p>
+            </article>
+            <article>
+              <span class="tiny-label">CONTROL-RATE ADAPTATION</span>
+              <h4>Finer sampling can recover precision.</h4>
+              <p>
+                On LIBERO Spatial t5, doubling the spline decode rate raises
+                success from 38% to 68% and from 34% to 72% under two horizon
+                protocols. These are task-specific results, not a claim of
+                universal rate invariance.
+              </p>
+            </article>
+            <article>
+              <span class="tiny-label">CAPACITY &amp; CADENCE</span>
+              <h4>Different failure modes need different controls.</h4>
+              <p>
+                In single-seed studies, extra controls raise Long t7 success
+                from 42% to 78%; a longer execution cadence raises t8 from 30%
+                to 52%. These motivate targeted follow-up rather than a combined
+                all-task score.
+              </p>
+            </article>
+            <article>
+              <span class="tiny-label">STANDARD TASK COMPETENCE</span>
+              <h4>A compact head retains broad capability.</h4>
+              <p>
+                Across four LIBERO suites and three seeds, the waypoint,
+                fixed-time spline, and event spline average 82.1%, 80.8%, and
+                80.7%. Eight output tokens replace 50 waypoint tokens;
+                end-to-end latency remains dominated by the vision–language
+                backbone.
+              </p>
+            </article>
+          </div>
+          <a
+            class="text-link"
+            href="https://github.com/Coderrexe/vla-bspline/blob/main/paper/results.md"
+            >Browse the complete results ledger
+            <span aria-hidden="true">↗</span></a
+          >
+        </details>
+      </section>
+
+      <section
+        id="hardware"
+        class="hardware-section"
+        aria-labelledby="hardware-heading"
+      >
+        <div class="wrap hardware-grid">
+          <div class="hardware-copy">
+            <p class="section-index">04 / FROM SIMULATION TO THE LAB</p>
+            <h2 id="hardware-heading">
+              Real cameras.<br />
+              Real contact.<br />
+              <em>Real engineering.</em>
+            </h2>
+            <p>
+              The project extends to the APOLLO Mavis V2 platform: an arm and
+              linear rail, two camera streams, a gripper, and custom 3D-printed
+              assembly fixtures.
+            </p>
+            <p>
+              We collected demonstrations for cabinet, drawer, and lamp
+              assembly, trained separate task policies, and built a Dora-based
+              inference interface with observation adapters, action decoding,
+              and recorded trajectory replay.
+            </p>
+            <div class="hardware-facts">
+              <span>3 assembly tasks</span><span>Human teleoperation</span
+              ><span>Dora integration</span>
+            </div>
+            <p class="small-note">
+              The video shows a human teleoperation demonstration used for
+              training. Hardware evaluation is ongoing; the quantitative policy
+              results above are from simulation.
+            </p>
+            <a
+              class="text-link"
+              href="https://github.com/Coderrexe/vla-bspline/tree/main/scripts/hardware"
+              >Explore the hardware integration
+              <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <figure class="hardware-video">
+            <div class="hardware-video-label">
+              <span class="record-dot"></span> LAMP ASSEMBLY / TRAINING
+              DEMONSTRATION
+            </div>
+            <video
+              controls
+              playsinline
+              muted
+              preload="none"
+              poster="/media/lamp-teleop.webp"
+              aria-label="Human teleoperation demonstration placing a red lampshade over a lamp"
+            >
+              <source src="/media/lamp-teleop.mp4" type="video/mp4" />
+            </video>
+            <figcaption>
+              Custom assembly fixture · recorded wrist-camera view
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section
+        class="section wrap build-section"
+        aria-labelledby="build-heading"
+      >
+        <div>
+          <p class="section-index">05 / OPEN THE HOOD</p>
+          <h2 id="build-heading">
+            Built to be<br />
+            <em>looked into.</em>
+          </h2>
+          <p>
+            Policy code, training scripts, evaluation protocols, and a detailed
+            results ledger. The action head fits into SmolVLA without changing
+            its vision–language backbone.
+          </p>
+          <a class="button dark" href="https://github.com/Coderrexe/vla-bspline"
+            >Explore the repository <span aria-hidden="true">↗</span></a
+          >
+        </div>
+        <div class="code-map">
+          <a
+            href="https://github.com/Coderrexe/vla-bspline/tree/main/policy/smolvla_spline"
+            ><span>01</span>
+            <div>
+              <strong>The action head</strong
+              ><code>policy/smolvla_spline/</code>
+            </div>
+            <span>↗</span></a
+          ><a href="https://github.com/Coderrexe/vla-bspline/tree/main/scripts"
+            ><span>02</span>
+            <div>
+              <strong>Data, evaluation &amp; deployment</strong
+              ><code>scripts/</code>
+            </div>
+            <span>↗</span></a
+          ><a href="https://github.com/Coderrexe/vla-bspline/tree/main/cluster"
+            ><span>03</span>
+            <div><strong>Experiment recipes</strong><code>cluster/</code></div>
+            <span>↗</span></a
+          ><a
+            href="https://github.com/Coderrexe/vla-bspline/blob/main/paper/results.md"
+            ><span>04</span>
+            <div>
+              <strong>Results &amp; methodology</strong
+              ><code>paper/results.md</code>
+            </div>
+            <span>↗</span></a
+          >
+        </div>
+      </section>
+
+      <section class="team-section wrap" aria-labelledby="team-heading">
+        <p class="section-index" id="team-heading">
+          THE PEOPLE BEHIND THE PROJECT
+        </p>
+        <div class="team">
+          <a href="https://www.simbashi.com/"
+            ><span class="author-initial">SS</span><strong>Simba Shi</strong
+            ><span>Personal website ↗</span></a
+          >
+          <div>
+            <span class="author-initial">QJ</span><strong>Quinten Jin</strong
+            ><span>Research collaborator</span>
+          </div>
+          <a href="https://sunxiatao.me/"
+            ><span class="author-initial">XS</span><strong>Xiatao Sun</strong
+            ><span>Personal website ↗</span></a
+          >
+        </div>
+        <div class="lab-credit">
+          <p>In collaboration with</p>
+          <a href="https://apollo-lab-yale.github.io/"
+            ><img
+              src="/media/apollo-lab-logo.png"
+              width="410"
+              height="43"
+              alt="APOLLO Lab, Yale University"
+              loading="lazy"
+          /></a>
+        </div>
+      </section>
+    </main>
+    <footer class="wrap">
+      <a class="brand" href="#"
+        ><img src="/favicon.svg" width="24" height="24" alt="" />VLA
+        B-Spline.</a
+      >
+      <p>Language in steps. Motion in curves.</p>
+      <div>
+        <a href="/media-manifest.json">Media provenance</a
+        ><a href="https://github.com/Coderrexe/vla-bspline">Code ↗</a>
+      </div>
+    </footer>
+    <div class="toast" role="status" aria-live="polite" id="toast"></div>
+  </body>
+</html>

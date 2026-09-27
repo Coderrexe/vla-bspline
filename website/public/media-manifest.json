@@ -1,0 +1,128 @@
+{
+  "videos": [
+    {
+      "file": "media/kettle.mp4",
+      "kind": "learned policy in simulation",
+      "source": "outputs/video_forensics/robocasa_confirm/kettle_official_success_seed1011.mp4",
+      "source_sha256": "97aa38a375c1375dba5952be0ad5b35246d2655719ee897b39bf7a5fc926bed3",
+      "export_sha256": "48f6ee6a58a3f2982f519dccd1e2b47b46e8a23ac093c2cebd691d0759a97b36",
+      "result_source": "outputs/robocasa_confirm_n40/confirmK_official_s1000_kettle_official_fixed_target_s1010_n40_2333000.json",
+      "result_sha256": "dc5a354e05c90ef14d68548bef477d1fa126237fbe2fc91d5954154ee5dd032d",
+      "scene_seed": 1011,
+      "steps": 516,
+      "success": true,
+      "initial_observation_sha256": "3119615e98e76ba06b6ebf10c0ade7e076c09fcd06794b8884293eb40ecc033c",
+      "instructions": [
+        "pick up the kettle from the counter",
+        "place the kettle on the stove burner",
+        "turn on the front-left burner where the kettle is placed"
+      ],
+      "switches": [
+        {
+          "from": 0,
+          "reason": "official_kettle_fixed_demo_median",
+          "step": 128,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "reason": "official_kettle_fixed_demo_median",
+          "step": 242,
+          "to": 2
+        }
+      ],
+      "environment_steps_per_video_second": 20
+    },
+    {
+      "file": "media/kettle-baseline.mp4",
+      "kind": "learned policy in simulation",
+      "source": "outputs/video_forensics/robocasa_confirm/kettle_original_fail_seed1011.mp4",
+      "source_sha256": "1be6d4c415795942cb42d74c74e62500df0ec245880bc0f65b5a20a4461f08d6",
+      "export_sha256": "a81f3615952327c6885f04e9cfb4f8821384becb145079db66d94419a82203a3",
+      "result_source": "outputs/robocasa_confirm_n40/confirmK_original_s1000_kettle_official_fixed_target_s1010_n40_2332999.json",
+      "result_sha256": "01a4e15211aa03359716058f82f2b0ba80ecf8e06c94ed2d189e79c0d8773391",
+      "scene_seed": 1011,
+      "steps": 1500,
+      "success": false,
+      "initial_observation_sha256": "3119615e98e76ba06b6ebf10c0ade7e076c09fcd06794b8884293eb40ecc033c",
+      "instructions": [
+        "pick up the kettle from the counter",
+        "place the kettle on the stove burner",
+        "turn on the front-left burner where the kettle is placed"
+      ],
+      "switches": [
+        {
+          "from": 0,
+          "reason": "official_kettle_fixed_demo_median",
+          "step": 128,
+          "to": 1
+        },
+        {
+          "from": 1,
+          "reason": "official_kettle_fixed_demo_median",
+          "step": 242,
+          "to": 2
+        }
+      ],
+      "environment_steps_per_video_second": 20
+    },
+    {
+      "file": "media/rinse.mp4",
+      "kind": "learned policy in simulation",
+      "source": "outputs/video_forensics/robocasa_confirm/rinse_official_success_seed1015.mp4",
+      "source_sha256": "9363483d169a3357770354fa88fad3643181e0e9a3ec707b45486ec018f0f529",
+      "export_sha256": "a2ff1318e82de7e1dc1b0c72ffe6d453f137b42e2cd9edb285f078ec00a26a33",
+      "result_source": "outputs/robocasa_confirm_n40/confirmR_official_s1000_rinse_official_fixed_target_s1010_n40_2332998.json",
+      "result_sha256": "f67e1572ec3ee46e3a040443f6b8681a5813eb91feab9422c8f58ef6ba7957b9",
+      "scene_seed": 1015,
+      "steps": 444,
+      "success": true,
+      "initial_observation_sha256": "e584310f4a9f1f913124f290287a28ae4cd1ac9d208e21917b3821fc8ad16be1",
+      "instructions": [
+        "turn on the sink",
+        "move the spout to wash all locations of the sink basin"
+      ],
+      "switches": [
+        {
+          "reason": "official_rinse_demo_median",
+          "step": 162,
+          "to": 1
+        }
+      ],
+      "environment_steps_per_video_second": 20
+    },
+    {
+      "file": "media/rinse-baseline.mp4",
+      "kind": "learned policy in simulation",
+      "source": "outputs/video_forensics/robocasa_confirm/rinse_original_fail_seed1015.mp4",
+      "source_sha256": "9b0509574e378e87dcd2f50a73658e80e5e238ef3b51aa5b0d328e5421e1f2f0",
+      "export_sha256": "2d5cc42ff3deab070a58b34f3c64c2ad0d320a2b67db8a41250c846e3237d0dc",
+      "result_source": "outputs/robocasa_confirm_n40/confirmR_original_s1000_rinse_official_fixed_target_s1010_n40_2332997.json",
+      "result_sha256": "0623a1cea3ac0590bd80bfb792cae39205e78120aab7db467c47de3427fb5ff9",
+      "scene_seed": 1015,
+      "steps": 1350,
+      "success": false,
+      "initial_observation_sha256": "e584310f4a9f1f913124f290287a28ae4cd1ac9d208e21917b3821fc8ad16be1",
+      "instructions": [
+        "turn on the sink",
+        "move the spout to wash all locations of the sink basin"
+      ],
+      "switches": [
+        {
+          "reason": "official_rinse_demo_median",
+          "step": 162,
+          "to": 1
+        }
+      ],
+      "environment_steps_per_video_second": 20
+    },
+    {
+      "file": "media/lamp-teleop.mp4",
+      "kind": "human teleoperation",
+      "source": "bc_demo/lamp_assembling/episodes/20260911T214721.850Z-7b6028/video/view_wrist.mp4",
+      "source_sha256": "7c16b099ce584b3aa64dd997c59c1ecd72105bbeb5ee478743fa99cf5268006f",
+      "export_sha256": "baa007323d99004d5e2b40e457d6f9307f10795352e7c10dd582617eb0d9769d"
+    }
+  ],
+  "note": "Simulation recordings save every fifth environment step at 4 fps. Hardware video is a human demonstration, not an autonomous policy success."
+}

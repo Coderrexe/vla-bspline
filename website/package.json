@@ -1,0 +1,15 @@
+{
+  "name": "vla-bspline-research",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node tools/serve.mjs",
+    "build": "node tools/build.mjs",
+    "preview": "node tools/serve.mjs dist",
+    "check": "node --check public/main.js && node tools/check.mjs"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 432" role="img" aria-labelledby="title desc">
+  <title id="title">Event-aligned spline action programs</title><desc id="desc">Images, robot state and an active language clause condition SmolVLA. Its action expert predicts eight spline tokens, a gripper curve and duration. A decoder samples a continuous path with independently adjustable duration and control rate.</desc>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0L6 3L0 6" fill="none" stroke="#6d826a" stroke-width="1.2"/></marker></defs>
+  <rect width="1280" height="432" fill="#f6f5ef"/>
+  <g font-family="Arial, sans-serif" fill="#173c3a">
+    <text x="48" y="48" font-size="25">One action interface. Semantic and temporal control.</text>
+    <path d="M48 75H1232" stroke="#d4dccb"/>
+    <g font-family="monospace" font-size="12" fill="#68756d"><text x="48" y="114">01 / CONDITION</text><text x="477" y="114">02 / PREDICT</text><text x="901" y="114">03 / EXECUTE</text></g>
+    <text x="48" y="163" font-size="19">Images + robot state</text>
+    <rect x="48" y="184" width="327" height="59" rx="2" fill="#e7eddd" stroke="#bbc9ae"/>
+    <text x="63" y="220" font-size="18">“Place the kettle on the burner.”</text>
+    <text x="48" y="280" font-size="16">Active language clause</text>
+    <text x="48" y="305" font-size="14" fill="#68756d">Unchanged vision–language backbone</text>
+    <path d="M397 205H449" stroke="#6d826a" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <g fill="#173c3a"><rect x="477" y="154" width="31" height="49"/><rect x="518" y="154" width="31" height="49"/><rect x="559" y="154" width="31" height="49"/><rect x="600" y="154" width="31" height="49"/><rect x="641" y="154" width="31" height="49"/><rect x="682" y="154" width="31" height="49"/><rect x="723" y="154" width="31" height="49"/><rect x="764" y="154" width="31" height="49"/></g>
+    <text x="477" y="243" font-size="21">8 spline tokens per segment</text>
+    <text x="477" y="280" font-size="16">Control points + gripper + duration</text>
+    <text x="477" y="305" font-size="14" fill="#68756d">Flow-matching action expert</text>
+    <path d="M819 205H873" stroke="#6d826a" stroke-width="1.5" marker-end="url(#arrow)"/>
+    <path d="M905 205C954 205 952 142 1005 145S1074 222 1128 182 1184 150 1230 162" fill="none" stroke="#173c3a" stroke-width="3"/>
+    <g fill="#b7603f" stroke="#f6f5ef" stroke-width="1.5"><circle cx="905" cy="205" r="4"/><circle cx="939" cy="183" r="4"/><circle cx="966" cy="156" r="4"/><circle cx="1005" cy="145" r="4"/><circle cx="1047" cy="176" r="4"/><circle cx="1085" cy="196" r="4"/><circle cx="1128" cy="182" r="4"/><circle cx="1178" cy="157" r="4"/><circle cx="1230" cy="162" r="4"/></g>
+    <text x="901" y="243" font-size="21">A continuous command path</text>
+    <text x="901" y="280" font-size="16">Adjust pace and sampling rate</text>
+    <text x="901" y="305" font-size="14" fill="#68756d">Observe → decode → act → replan</text>
+    <path d="M48 343H1232" stroke="#d4dccb"/>
+    <text x="48" y="381" font-size="15">LANGUAGE chooses the subgoal.</text><text x="477" y="381" font-size="15">SHAPE specifies the segment.</text><text x="901" y="381" font-size="15">DURATION exposes the clock.</text>
+    <text x="48" y="408" font-size="12" fill="#68756d">Method schematic · A clause can span multiple segments. Curve illustrations are not measured robot trajectories.</text>
+  </g>
+</svg>
