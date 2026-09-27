@@ -2,11 +2,254 @@
 
 ## Current status
 
+**Latest (trial 025, September 13): operator-reported table contact; learned
+motion is on hold.** The operator subsequently reset the arm. No confirmed grasp,
+insertion or task completion has occurred. Our policy, helper and recorder are
+stopped. Read-only API inspection finds the operator's healthy teleoperation
+reset session; it has been left untouched. No production runtime, driver,
+collision setting or model checkpoint was changed.
+
+| 400 ms/row trial | Requested / measured net descent | Gripper opening | Outcome |
+|---|---:|---:|---|
+| 024: 16 chunks, 128 rows | 237.920 / 233.417 mm | 81→72 mm | Manually interrupted as open fingers approached the table; no grasp. Operator later estimated a 1 cm gap at the stopped pose. |
+| 025: 19 chunks, 152 rows | 262.181 / 257.269 mm | 81→73 mm | Next prefix refused at the recorded workspace floor. **Operator reports table contact during this trial.** No grasp. |
+
+Trial 025's final recorded corrected TCP is [0.704377, −0.047514, −0.094046] m
+in the manipulation-arm base frame. Its unpublished next prefix requests another
+8.011 mm descent. The existing −0.100 m TCP floor checks demonstration support,
+not the lowest fingertip or actual table geometry. Thus a later workspace
+refusal did **not** prevent physical contact. There are zero reported fault frames
+in 1,805 running telemetry samples, but these telemetry values cannot override the
+operator's observation. Contact time and contact force are not established.
+The attempted manual stop found API 404 after the helper had already ended
+trial 025; it was not the terminating intervention. Trial 024, by contrast, was
+manually interrupted and did not hit a policy guard.
+
+### Post-contact scene coverage diagnosis
+
+The selected production hardware scene is `mavis_v2` with safety enabled. A fresh
+**offline** build of that scene and replay of all 1,805 archived joint samples
+finds the final TCP projection **215.777 mm outside the modeled table footprint**.
+The modeled table spans world y = [−0.310, +0.310] m, while the final TCP has
+world y = +0.525777 m. Forward kinematics and the transformed recorded TCP agree
+within 0.001263 mm over the audit. This verifies the coordinate calculation,
+not physical calibration: the work surface under the task is not represented by
+that table box. The model table plane is at world z = 0.735 m; the final TCP
+is 13.142 mm above that plane, but the TCP is not the lowest fingertip. Neither
+this height nor the contact report establishes a safe floor value.
+
+`audit_apollo_table_coverage.py` imports only the simulation package, builds a
+separate model, and performs kinematics without stepping physics, connecting to
+hardware, or modifying the production scene. Evidence:
+`drawer_table_coverage_046.json`, `drawer_post_contact_reset_045.json`,
+`drawer_trial_025_analysis/`, and `drawer_task_slow_slew_042/` under
+`outputs/hardware_inference_20260912/` (raw camera recordings also retained on the
+Apollo workstation). Both sampled heads still predict open-gripper descent on
+the refused input in the separate offline diagnostic
+`drawer_refused_head_comparison_043/`; switching heads alone is not a recovery.
+
+Our deployed launchers now check `apollo_contact_review_required.json` before
+any motion authorization or hardware-session creation, including controller-enabled
+shadow tests. Read-only prediction remains available. This is a **local workflow
+hold, not a hardware safety device**; it does not change the lab's teleoperation
+or stop another application. The original 206 isolated tests plus 11 hold tests
+pass (**217 total**, `adapter_tests_v28.xml`). There is no CLI bypass.
+
+Before releasing the hold: obtain on-site inspection of the contact and hardware
+condition; have the lab owner validate the actual work surface and installed
+gripper geometry, including startup motion; verify the revised protection offline
+and through the lab's commissioning procedure; then review a revised first-grasp
+trial. Do not lower the existing floor, disable collision protection, replay the
+refused prefix, or treat a reset alone as resolving either failure.
+
+### Execution profile and preceding trials
+
+**Trial 023 (September 13, 00:33 EDT):** the operator reset both arms
+to the collection pose; fresh idle telemetry and both RGB views confirmed the
+starting setup and an 81 mm gripper opening. The new slow/slew profile below was
+loaded, but startup produced a manipulation-arm mode/state warning and a recovery
+event before any policy prediction or action. The helper closed only its own
+session, without return-home. The policy and read-only recorder were then stopped.
+The production runtime was not restarted or modified. Three Studio application
+instances still had established connections to the manipulation controller on
+port 18333. The warning alone does not prove what issued the controller change;
+these connections must be eliminated before another supervised attempt.
+Evidence: `drawer_reset_preflight_037.json`, `drawer_trial_023/session_check.json`,
+`drawer_trial_023_summary.json`, `drawer_task_slow_slew_037/node_report.json`.
+**Zero learned actions in trial 023; no new grasp or assembly result.**
+
+The opt-in execution revision passed **206 isolated CPU tests**
+(`adapter_tests_v27.xml`), including the original profiles, a full mocked 150-chunk
+horizon, the exact trial-022 refusal, workspace stops, and non-response checks:
+
+| Change | Scope |
+|---|---|
+| 400 ms rows, 2.5 Hz wire rate | Same predicted pose deltas; twice the row duration of trial 022. Previous chunk finishes before the next inference starts. |
+| Gripper reference slew | At most 0.06 normalized opening change per row, including the chunk boundary. Only gripper references change; raw and transmitted outputs are both logged. This is not a physical velocity/force limit. |
+| Response timing | At 400 ms, compare measurements with the expected active row, not the future final target. Same-host publication time approximates receipt; this is not a hardware acknowledgement. Persistent non-response still stops after 3 s. |
+| Finite grant | Distinct `SUPERVISED_DRAWER_TASK_SLEW` grant; at most 150 chunks and 550 s at the slower clock. Original 200 ms profile remains capped at 300 s. |
+| Preserved limits | Same pose, path, workspace, rotation, stale-input and reset guards; same driver speed and force settings. Gripper-step tolerance of 1e-7 only covers float32 rounding (<0.00001 mm). |
+
+Trial 023 is a startup interruption, not a scored policy failure or a successful
+timing test. After Studio exited, trials 024–025 executed the revised clock/filter,
+as reported above. Improved net tracking does not establish task success or
+physical safety. The archived trial-024 executor window has zero joint-step cap
+events in 6,212 logged ticks, versus 1,922 in 3,958 for trial 022; trajectories
+and termination points differ, so this is not a controlled timing ablation.
+
+**Prior 200 ms policy (trial 022, September 13 shortly after midnight):** after the operator
+restored both arms to the collection pose and opened the gripper, the existing
+teleoperation reset session was handed over to inference using one targeted
+DELETE without return-home. No recording or engaged teleoperation was present.
+The earlier waiting client 032 had expired without any motion grant. Fresh
+client 033 then ran 22 eight-row chunks continuously at 200 ms/row. Measured
+net xyz was [16.372, −43.981, −236.456] mm, versus requested
+[27.525, −54.103, −313.993] mm. Gripper response occurred in both directions
+throughout the run; the response-window endpoints were 81→67 mm. The view arm
+and rails stayed still during execution, with no reported fault in 991 running
+telemetry frames. There is still no established grasp or insertion.
+
+The next prefix was refused because an adjacent gripper target changed by
+0.065143 (5.472 mm) against the 0.06 (5.040 mm) per-row allowance. Its total
+gripper variation, initial target difference, and pose budgets were not the
+trigger. The operator then reported the fingers very close to the tabletop.
+The session is closed and our client/capture are stopped; **the gripper limit
+has not been increased and the refused motion has not been replayed**.
+Fresh physical clearance must be established before further motion.
+Evidence: `drawer_trial_022_analysis/`, `drawer_task_033/`,
+`drawer_reset_handoff_033.json`.
+
+The reset reduced the view-arm discrepancy to 5.241 mm downward and 0.679 degrees
+after controller startup (versus 33.893 mm and 4.424 degrees in trial 021).
+The stopped grip TCP z is −74.412 mm. Across the demonstrations, the median
+first target below half-open is [+18.526, +28.159, −3.195] mm relative to that
+pose; this is a descriptive comparison, **not a correction command or clearance
+estimate**. Offline checks on the same stopped input at three inference-noise
+seeds predict 3.15–5.12 mm descent for spline and 8.23–16.17 mm for waypoint.
+Neither head establishes a safe grasp from this input merely by being finite.
+Evidence: `drawer_trial_022_pose_support.json`, `drawer_stopped_pose_comparison_034/`.
+
+The operator confirmed a small visible gap below both fingers. No further
+controller enable or learned motion is authorized from that near-table pose
+without clearance/recovery review: the next predicted descent is several
+millimetres, and controller startup itself has caused downward movement.
+
+### First-grasp and execution diagnostics after trial 022
+
+Read-only runtime logs record 1,922 joint-step cap events over 3,958 controller
+ticks in the saved trial window, with zero reported IK slips/divergences.
+Combined with the command-versus-motion discrepancy above, this supports testing
+a slower command clock to reduce saturation; it does not prove that saturation
+is the only reason the grasp was missed. A pure-source replay verifies unit
+integrated delta bookkeeping for the candidate 400 ms rows / 2.5 Hz wire rate.
+The clock was initially offline-only; the reviewed opt-in implementation,
+interrupted trial 023, and executed trials 024–025 are documented above.
+No driver speed, force, workspace or substantive gripper
+step limit was raised. Evidence: `drawer_trial_022_executor_limits.json`,
+`drawer_trial_022_runtime_window.log`, `runtime_delta_cadence_400ms_offline_036.json`.
+
+`diagnose_apollo_first_grasp.py` separately checks six fixed offsets around the
+first recorded gripper target below 0.5, in all five held-out episodes and the
+first five training episodes in saved provenance: 60 observations, three paired
+inference-noise seeds, both frozen heads. Original legacy state/action files are
+hash-checked against checkpoint provenance; both original RGB streams are decoded
+at exact frame indices. No live robot interface is imported or action published.
+Training and held-out episodes are reported separately; these are not additional
+training seeds or physical successes.
+
+| Offset from first half-opening target | Held-out gripper MAE, spline (mm) | Held-out gripper MAE, waypoint (mm) |
+|---|---:|---:|
+| −32 frames (−1.28 s) | 3.97 | 2.08 |
+| −16 frames (−0.64 s) | 11.81 | 8.68 |
+| −8 frames (−0.32 s) | 13.77 | 14.50 |
+| Boundary | 25.05 | 27.89 |
+| +8 frames (+0.32 s) | 4.14 | 4.24 |
+| +24 frames (+0.96 s) | 1.83 | 0.85 |
+
+Each row averages five observations and three inference-noise samples over the
+eight predicted targets. Both heads predict strong closure on recorded inputs
+after the transition, but the transition itself is uncertain. In particular,
+similar **mean** target openings at the boundary conceal substantial per-example
+error and must not be advertised as accurate grasp timing. These checks separate
+command-prediction behavior on recorded states from the unresolved closed-loop
+approach. Raw per-example predictions, targets, splits and video hashes are in
+`first_grasp_inputs_035/` and `first_grasp_diagnostic_035/`.
+
+**Previous continuous attempt (trial 021):** a separate continuous drawer-task profile replaced the
+short commissioning horizons. Seven eight-row chunks executed before the next
+proposed descent crossed the recorded-workspace envelope. Requested net xyz was
+[24.668, 5.254, −34.748] mm; measured [22.411, 4.362, −33.144] mm. Gripper
+readout changed from 67 to 68 mm; no grasp or insertion was established. There
+were 388 running telemetry frames with no reported fault. The view arm and rails
+were unchanged during execution. Our session is closed (API 404), our client
+and camera capture are stopped, and the production runtime remains running.
+Evidence: `drawer_trial_021_analysis/`, `drawer_task_030/`.
+
+The recorded-view comparison identifies an important setup mismatch: the view
+arm TCP is 33.893 mm lower, 9.034 mm displaced in x and 5.574 mm in y, with a
+4.424-degree orientation difference from the collection pose. Across trials
+016–021 its reported height fell from 288.460 to 261.011 mm in approximately
+5.5 mm increments between trials, although it stayed still during each action
+window. Session-local stationarity calibration does not check absolute agreement
+with the collection camera pose. Therefore its passing result must not be
+interpreted as visual-input equivalence. This is a plausible contributor to
+the missed approach, not an established sole cause. The next physical attempt
+should restore both arms to the collection setup and use one continuous session,
+with camera/rail agreement checked before publication. Do not increase the floor
+allowance to continue the current missed approach. See the pose audit below.
+
+**Operator clarification:** the earlier reported gripper fix was resetting the
+arm and bringing it back, not a specified hardware or software repair. Subsequent
+checks through our same Dora inference path confirm response in both directions:
+trial 016 closed from 81 to 74 mm (target 74.28 mm); trial 017 reopened from
+74 to 80 mm (target 80.72 mm). Both used a fixed target repeated in three
+eight-row chunks, with zero pose/rail increments and no measured arm/rail motion
+during the response window. All sessions were closed without return-home. The
+runtime PID/epoch and audited gripper/driver/executor source hashes are unchanged.
+These checks allowed commissioning to resume, but later discrepancies mean the
+gripper response issue should not be described as permanently resolved.
+
+The subsequent learned approach (trial 018) executed eight eight-row chunks at
+200 ms per row. Requested net xyz was [−1.335, −26.361, −125.709] mm; measured
+net xyz was [−1.759, −25.746, −121.200] mm. Measured gripper opening decreased
+from 80 to 73 mm, following a final target of 73.332 mm. The view arm and rails
+were unchanged during the response window; 421 running telemetry frames contained
+no reported fault. The ninth prefix was refused by the cumulative 0.1 gripper
+change allowance, before publication. All sessions and our clients are stopped.
+The saved camera views show an approach, not an established grasp or insertion.
+Evidence: `drawer_trial_018_analysis/report.json`, `drawer_postfix_approach_025/`.
+
+After the operator confirmed roughly 8–10 cm of clearance from the knob, trial
+019 continued with the separate grasp-stage profile. Seven eight-row chunks
+produced measured net xyz [16.371, −7.687, −66.301] mm, against requested
+[17.387, −7.745, −67.889] mm. The gripper initially closed from 73 to 67 mm, then
+its readout remained at 67 mm despite later targets down to 59.668 mm. No contact
+or grasp is established from this discrepancy. The eighth prefix was refused
+because its 0.038715 rad rotation path would take the accumulated 0.147331 rad
+above the 0.15 rad stage limit. Translation and gripper-stage budgets were not
+the stopping condition. There were 380 running frames with no reported fault;
+view arm and rails were unchanged during execution. The session is closed and
+our client stopped. Camera sequence and raw predictions are retained under
+`drawer_trial_019_analysis/` and `drawer_grasp_026/`.
+
+After the operator confirmed a visible gap between the right finger and right
+knob, trial 020 executed one eight-row slow alignment prefix. Requested net xyz
+was [13.230, 1.165, −0.873] mm; measured net xyz was [12.289, 1.092, −0.571] mm.
+All eight rows completed and the helper recorded a three-second response window
+before closing its own session without return-home. There were 172 running
+telemetry frames, no reported fault, and no measured view-arm or rail motion.
+Measured gripper opening remained 67 mm throughout, despite targets from
+63.532 mm initially to 60.471 mm finally. The independent idle monitor also read
+67 mm afterward, with no reported arm error. This is not a grasp result; command
+delivery, gripper feedback, and possible mechanical obstruction still need to be
+distinguished before further closure. Our client and video capture have ended.
+Evidence: `drawer_trial_020_analysis/`, `drawer_align_029/`.
+
 September 12, evening EDT: all four trained checkpoints are on the lab workstation.
 The drawer spline has executed a sustained physical approach using full action
 chunks. Slowing row execution from 40 to 200 ms preserves commanded increments
 while reducing their requested speed; this addresses the live executor's restrictive
-motion caps without changing those caps. The latest run executed six eight-row
+motion caps without changing those caps. Before the reset, trial 013 executed six eight-row
 chunks and descended 126.2 mm toward the drawer, with no reported fault and no
 motion of the view arm or rails during policy execution. It stopped when the
 predicted gripper closure exceeded the approach-only allowance. **No grasp,
@@ -18,7 +261,7 @@ opening, with zero pose/rail increments. Dora accepted the action, but the measu
 opening did not change during the three-second response window. Trial 015 repeated
 the same fixed target in three eight-row chunks, again with no measured closure
 and zero pose/rail movement during the response window. Both sessions are closed.
-The next step is to establish reliable gripper response before approaching contact. The production
+Trials 016–018 subsequently demonstrated some gripper response, as described above. The production
 runtime and drivers remain unchanged.
 
 Initial commissioning history: at 20:26 EDT, one
@@ -51,7 +294,7 @@ three-step learned-motion tests described below.
 |---|---|---|
 | Four checkpoint transfers / strict loads | All weight hashes match; all models produce finite 8×16 action prefixes | `gpu_bundle_check_cu128_v3.json` |
 | Observation adapter round trip | All four fixture predictions are bit-identical before/after the stabilized adapter on the lab GPU | same report |
-| Isolated adapter / publication tests | 128 passed, including native/slow wire timing, session grants, cumulative budgets, approach profiles, and deterministic gripper checks; repeat-hold cannot accumulate closure; mocked transport only | `adapter_tests_v21.xml` |
+| Isolated adapter / publication tests | 191 passed, including native/slow wire timing, session grants, cumulative budgets, approach/grasp/task profiles, workspace and response checks, and deterministic gripper checks; mocked transport only | `adapter_tests_v25.xml` |
 | Real Dora inputs → drawer spline prediction | 5/5 finite prefixes; 202–236 ms inference, median 211 ms | `drawer_observer_002/report.json` |
 | Real cameras in policy client | 1,171 RGB frames over a 20 s shadow attachment; no frame errors | `drawer_shadow_001/node_report.json` |
 | Runtime recognizes our client | Telemetry reported `policy_attached: true`, drawer spline ID, `policy_arms: [grip]` | read-only `/ws/telemetry` check; shadow log/spec counters |
@@ -90,6 +333,13 @@ motion measurements above are distinct from those original predictions.
 | 013 | Extended slow approach; six full chunks executed, seventh refused on gripper allowance | Seventh predicted opening 0.828–0.868 versus measured 0.976; translation and rotation were within limits; no grasp command was authorized beyond the approach allowance |
 | 014 | Deterministic gripper response check, not a learned policy; one native row, zero arm/rail increments | Target opening 0.89619; measured opening stayed 0.97619 over three seconds; both arms/rails unchanged during the response window; session closed |
 | 015 | Deterministic repeated-target gripper check; three eight-row chunks, all pose/rail increments zero | Exactly the same 0.89619 target throughout, not cumulative closure; measured opening stayed 0.97619; 166 running frames, no reported arm fault; session and client closed |
+| 016 | After operator reset: fixed closing target through Dora; three eight-row chunks | Requested 0.884286; measured 0.964286→0.880952 (81→74 mm); no measured arm/rail motion during response; 168 running frames, no reported fault |
+| 017 | Small reopening of the empty gripper; fixed opening target through Dora, three eight-row chunks | Requested 0.960952; measured 0.880952→0.952381 (74→80 mm); no measured arm/rail motion during response; 169 running frames, no reported fault |
+| 018 | Learned approach after operator reset; eight eight-row chunks, ninth refused at the approach-only closure limit | Requested path 131.696 mm; measured net descent 121.200 mm; gripper 80→73 mm; 421 running frames, no reported fault; view arm and rails unchanged during response; no grasp established |
+| 019 | First bounded grasp-stage continuation; seven eight-row chunks, eighth refused at cumulative rotation limit | Requested path 76.467 mm; measured net xyz [16.371, −7.687, −66.301] mm; gripper initially 73→67 mm, then unchanged despite smaller targets; no reported fault; view arm/rails unchanged; no grasp established |
+| 020 | One eight-row slow alignment prefix after operator-confirmed visible gap | Requested net xyz [13.230, 1.165, −0.873] mm; measured [12.289, 1.092, −0.571] mm; no reported fault; gripper remained 67 mm despite final target 60.471 mm; session closed; no grasp established |
+| 021 | Continuous task profile; seven eight-row chunks, eighth refused at workspace floor | Requested path 85.157 mm; measured net xyz [22.411, 4.362, −33.144] mm; gripper 67→68 mm; 388 running frames, no reported fault; view arm/rails unchanged during action window; no grasp established |
+| 022 | Continuous attempt from restored collection setup; 22 eight-row chunks, next prefix refused at per-row gripper step | Requested path 507.924 mm; measured net xyz [16.372, −43.981, −236.456] mm; sustained gripper response, endpoints 81→67 mm; 991 running frames, no reported fault; view arm/rails unchanged during action window; no grasp established |
 
 The production source scales external deltas by `period / chunk_dt_s`, then its
 `ActionAnchor.row_step` consumes one full row budget. Declaring the model-call rate
@@ -128,6 +378,53 @@ change checks remain. Trial 013 used this profile and stopped on the gripper
 check, before consuming its translation allowance. Parked-state inputs continue
 to be checked at the original callback cadence between slow model predictions.
 
+The separately selected `--supervised-grasp` profile was mock-tested before its
+first supervised execution in trial 019. It cannot be combined with either approach flag.
+It retains the extended approach's 200 ms rows, maximum 12 chunks/30 s, 250 mm
+total translation, 40 mm per prefix, 6 mm per row, 0.15 rad total rotation,
+session-local input calibration, fresh images/state, fixed view arm/rails, and
+unchanged runtime/driver limits. It requires a new grant with the distinct purpose
+`SUPERVISED_GRASP_STAGE`.
+
+Only the gripper envelope changes for this stage: an arbitrary valid initial
+opening is permitted, allowing continuation without a gratuitous reopen/reset.
+The first target of each prefix must be within 0.1 of both measured opening and
+the preceding published target; adjacent targets within a prefix may differ by
+at most 0.06. Gripper-target variation is limited to 0.45 per prefix and 1.0
+over the stage, including reversals and chunk boundaries. Targets remain in [0,1].
+An oversized prediction is saved and refused, never clipped or retried. This
+permits gradual learned closure but does not establish clearance or contact-force
+safety; physical alignment and clearance require operator review between bounded
+stages. Trial 019 was automatically closed at its rotation allowance, without
+return-home or increasing any limit.
+
+The separate `--supervised-drawer-task` profile permits one finite continuous
+attempt without the approach/grasp profiles' small cumulative allowances. It
+requires a fresh `SUPERVISED_DRAWER_TASK` grant, the drawer checkpoint, eight
+200 ms rows, at most 150 chunks and 300 seconds, and the unchanged hardware
+speed scale of 0.1. It cannot be combined with the other profiles.
+
+| Continuous-task check | Limit |
+|---|---|
+| Requested translation | 2 m total path; 40 mm/prefix; 6 mm/row |
+| Requested rotation | 1.5 rad total path; 0.125 rad/prefix; 0.025 rad/row |
+| Corrected grip TCP box, metres | x [0.53, 0.77], y [−0.16, 0.15], z [−0.10, 0.23] |
+| Orientation excursion from initial task observation | 0.30 rad |
+| Gripper-target variation | 0.1 initial difference from measured opening; 0.2 across chunk boundaries; 0.06/row; 0.62/prefix; 4.5 total |
+| Gripper response | Stop after 3 s of sustained target <0.4 while measured >0.6, or target >0.85 while measured <0.65 |
+| Motion response | Stop if >30 mm requested path over a 5 s window yields <3 mm measured position excursion |
+
+The box is a demonstration-support envelope, **not a collision model**. Every
+proposed intermediate pose is checked. The response checks permit normal partial
+opening around a grasped knob; they do not certify contact or force safety.
+Predictions are refused rather than clipped or retried. Fresh state/images,
+session/epoch identity, parked-state monitoring, and disarming on reset, fault,
+intervention or lost connection remain active. Production code/settings were not
+changed. The 51 demonstrations have median translation path 1.572 m, maximum
+1.822 m, maximum rotation path 1.270 rad, and maximum gripper-target variation
+3.936; these describe the data, not hardware safety ratings. The full recording
+lasts at most 43.88 s, about 219 s at the slow execution clock.
+
 The runtime log specifically reports 0.04 m/s TCP and 0.06 rad/s joint caps,
 with capped ticks during native and some slow motion. Fivefold time stretching
 does not guarantee all caps are inactive. Trial 012 nevertheless tracks its
@@ -137,7 +434,7 @@ not a matched hardware timing ablation or an architecture comparison**. Pure-met
 replay confirms unit integrated delta bookkeeping at both clocks:
 `runtime_delta_cadence_slow_v2.json`.
 
-One issue to resolve before grasp validation: trial 013's gripper readout remained
+An issue identified before grasp validation: trial 013's gripper readout remained
 0.976 throughout, despite published targets as low as 0.884 within allowed
 prefixes. Earlier single-row and slow tests did show gripper response. The current
 evidence does not establish whether this is command delivery, sensor freshness,
@@ -176,10 +473,61 @@ Read-only checks after trial 014 established the following:
   82 mm gripper opening with no monitor error (`gripper_idle_readback_020.json`).
 
 The production process, runtime sources, drivers, services, and other users'
-processes remain untouched. Confirm whether the existing lab teleoperation path
-can operate the gripper; if it cannot, resolve that shared hardware path with the
-runtime owner before another grasp attempt. Any runtime instrumentation/restart
-requires coordination with that owner.
+processes remain untouched by our integration. The operator subsequently reset
+the arm and returned it, and trials 016–018 confirmed measured response through
+our Dora action path. No hardware/software repair is established. Any future runtime
+instrumentation/restart requires coordination with its owner.
+
+### Approach pose compared with the recorded demonstrations
+
+A read-only audit of all 51 drawer recordings (49,259 frames) compared trial
+018's refused observation with recorded poses. The five closest recorded positions
+are 10.9–16.2 mm away, at frames 42–77. Their measured openings are about 82 mm,
+versus 73 mm in the live observation: the policy has begun partial closure earlier.
+Across the recordings, the median position at the first target below half-open is
+[+43.7, +14.3, −108.5] mm relative to this stopped pose. This supports interpreting
+the current pose as an early approach; it is **not a commanded correction**, an
+object-localization estimate, or proof of contact clearance.
+
+The median demonstration is 38.04 s with 1.572 m of summed translation commands.
+The 99.9th percentiles of per-row translation norm, rotation norm, and successive
+gripper-target change are 5.999 mm, 0.01619 rad, and 0.0480, respectively. These
+describe the data, not hardware safety limits. A full 5×-slowed task would require
+a substantially longer horizon than the commissioning profiles. Evidence:
+`drawer_grasp_stage_data_audit.json`. No complete-task trial is represented by
+these statistics.
+
+At trial 019's stopped pose, the three closest recorded positions are 3.05–5.15 mm
+away, with orientation differences of 4.27–4.79 degrees. The median first
+half-open target in the recordings is still [+33.6, +22.1, −31.6] mm away.
+These remain descriptive comparisons, not localization or commands; nearest
+position alone can also match another phase of an episode. Saved-input checks
+of both frozen heads across three inference-noise seeds propose predominantly
+positive-x motion: spline +13.13–13.67 mm and waypoint +8.49–12.95 mm over eight
+rows. Spline proposes 1.84–5.16 mm downward movement; waypoint 0.29–4.43 mm.
+Both propose negative-y rotation. None of these offline predictions was executed.
+Evidence: `drawer_trial_019_pose_audit.json`, `drawer_stopped_pose_comparison_027/`.
+
+At trial 021's refused observation, the current TCP z is −98.446 mm. The
+unpublished eight-row prefix requests another 9.022 mm downward, with target
+opening 70.875–71.230 mm; its fourth proposed position crosses z=−100 mm.
+The nearest recorded TCP position is 8.742 mm away with 1.300-degree orientation
+difference and measured gripper opening 82 mm, versus 68 mm live. The median
+first recorded target below half-open is [+12.294, +19.088, +20.839] mm relative
+to the live pose—higher, not lower. These comparisons are not instructions to
+move by those offsets, since position matching does not identify the object or
+episode phase. The fixed-view pose mismatch is reported at the top of this
+document. Images at the nearest recording frame and the refused live observation
+were inspected in both streams. Evidence: `drawer_trial_021_pose_support.json`,
+`drawer_pose_reference_031/`; script `audit_apollo_pose_support.py` is read-only.
+
+The current gripper discrepancy is more specific than a complete failure to
+respond: its first command moved the fingers, but later changed targets did not
+produce a changed readout. Existing traces do not expose the SDK command return
+code or last successful gripper-poll timestamp. The next diagnosis should separate
+physical contact, repeated-command delivery within a session, and polling before
+assuming a learned-policy or hardware cause. No production instrumentation,
+settings, force/speed change, or runtime restart has been performed.
 
 ### Saved-pose comparison of both drawer heads
 

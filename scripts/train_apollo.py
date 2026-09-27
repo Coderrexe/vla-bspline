@@ -13,14 +13,17 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--root', type=Path, required=True)
-    parser.add_argument('--task', choices=['cabinet_assembling','drawer_assembling'], required=True)
+    parser.add_argument('--task', choices=['cabinet_assembling','drawer_assembling','lamp_assembling'], required=True)
     parser.add_argument('--head', choices=['waypoint','spline'], required=True)
     parser.add_argument('--steps', type=int, default=20000)
     parser.add_argument('--tag', default='v1')
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--verify-initialization', action='store_true')
     parser.add_argument('--dataset-version', default='v1')
+    parser.add_argument('--save-every', type=int, default=5000)
     args = parser.parse_args()
+    if args.steps <= 0 or args.save_every <= 0:
+        parser.error('Training and checkpoint intervals must be positive')
     sys.argv = [sys.argv[0]]  # LeRobot config validation also inspects CLI flags.
     import torch
     from lerobot.configs import FeatureType, PolicyFeature
@@ -53,7 +56,7 @@ def main():
                                                    eval_split=.09, video_backend='pyav'),
                               policy=policy, output_dir=output, seed=1000,
                               num_workers=6, batch_size=args.batch_size, steps=args.steps,
-                              save_freq=min(5000,args.steps), log_freq=100,
+                              save_freq=min(args.save_every,args.steps), log_freq=100,
                               eval_steps=min(2500,args.steps), max_eval_samples=512,
                               env_eval_freq=0, prefetch_factor=2,
                               wandb=WandBConfig(enable=False))
@@ -98,9 +101,20 @@ def main():
     checkpoint=output/'checkpoints/last/pretrained_model'
     if not (checkpoint/'model.safetensors').is_file():
         raise RuntimeError('Training did not produce a complete checkpoint')
-    shutil.copy2(dataset/'apollo_manifest.json',checkpoint/'apollo_interface.json')
-    shutil.copy2(dataset/'export_manifest.json',checkpoint/'dataset_provenance.json')
-    shutil.copy2(manifest,checkpoint/'hardware_training_manifest.json')
+    # Annotate each retained checkpoint with its actual update count, so an
+    # earlier validation-selected model cannot be mistaken for the final model.
+    for saved in sorted((output/'checkpoints').iterdir()):
+        if not saved.name.isdigit():
+            continue
+        target = saved/'pretrained_model'
+        if not (target/'model.safetensors').is_file():
+            raise RuntimeError(f'Incomplete saved checkpoint: {target}')
+        shutil.copy2(dataset/'apollo_manifest.json',target/'apollo_interface.json')
+        shutil.copy2(dataset/'export_manifest.json',target/'dataset_provenance.json')
+        item = dict(record, requested_training_steps=args.steps, steps=int(saved.name))
+        (target/'hardware_training_manifest.json').write_text(json.dumps(item,indent=2)+'\n')
+        if (dataset/'apollo_observation_contract.json').is_file():
+            shutil.copy2(dataset/'apollo_observation_contract.json',target/'apollo_observation_contract.json')
     print('HARDWARE_TRAINING_COMPLETE',str(checkpoint),flush=True)
 
 

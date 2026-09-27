@@ -1,0 +1,14 @@
+{
+  "review_id": "lamp_approach_20260913_2018",
+  "scope": "SUPERVISED_LAMP_APPROACH",
+  "contact_marker_sha256": "bd595e3aba14404c9fcc8f585b423205462371c21fa1a43a80b08945393a27bd",
+  "operator_confirmed_lamp_clearance": true,
+  "operator_present": true,
+  "operator_statement": "go ahead. clearance is good",
+  "confirmed_at_utc": "2026-09-14T00:18:37+00:00",
+  "valid_until_utc": "2026-09-14T01:10:00+00:00",
+  "allowed_policy_ids": ["vla_lamp_assembling_spline_20260912", "vla_lamp_assembling_waypoint_20260912"],
+  "restriction": "At most three eight-row chunks at 200 ms/row; TCP z >= 0.10 m; gripper stays >= 0.85 open. Not full lamp assembly, demonstration replay, or drawer/cabinet permission.",
+  "existing_contact_hold": "Remains in place for all other motion paths. The production scene has not been changed or claimed recalibrated.",
+  "numerical_review": "Weights and input-adapter identity verified; small recorded cross-GPU differences retained as REVIEW_REQUIRED. Every actually generated motion prefix is checked separately against the finite approach limits."
+}

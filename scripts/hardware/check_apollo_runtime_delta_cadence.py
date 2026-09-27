@@ -42,7 +42,9 @@ def main():
             'source_sha256':{str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in [source,runner]},
             'cases':[]}
     for count in (1,8):
-        for rate,row_dt in ((3.125,.04),(25.,.04),(5.,.2)):
+        # The 400 ms case is an offline candidate only. Adding it here does not
+        # enable that clock in the live client, grants, or response watchdogs.
+        for rate,row_dt in ((3.125,.04),(25.,.04),(5.,.2),(2.5,.4)):
             slot=Slot()
             slot.rows=np.zeros((count,8),np.float32)
             slot.rows[:,0]=.001
@@ -66,6 +68,7 @@ def main():
             expected=(1/rate)/row_dt
             np.testing.assert_allclose(total,intended*expected,rtol=1e-6,atol=1e-9)
             report['cases'].append({'chunk_rows':count,'wire_rate_hz':rate,'row_dt_s':row_dt,
+                                    'candidate_not_live_enabled': row_dt == .4,
                                     'integrated_translation_m':total[:3].tolist(),
                                     'intended_translation_m':intended[:3].tolist(),
                                     'delta_multiplier':float(multiplier)})

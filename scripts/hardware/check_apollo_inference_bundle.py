@@ -11,7 +11,7 @@ import numpy as np
 import torch
 
 from apollo_predictor import ApolloPredictor
-from apollo_legacy_state import CheckpointStateAdapter, training_to_current_tcp_state
+from apollo_legacy_state import CheckpointStateAdapter
 
 
 def main():
@@ -51,7 +51,8 @@ def main():
             latencies.append(time.perf_counter()-start)
         if actual.shape != (8, 16) or not np.isfinite(actual).all():
             raise ValueError('Invalid action prefix')
-        reconstructed = CheckpointStateAdapter(path)(training_to_current_tcp_state(state))
+        adapter = CheckpointStateAdapter(path)
+        reconstructed = adapter(adapter.to_current_state(state))
         model.reset()
         torch.manual_seed(seed)
         adapted = model.predict_chunk(reconstructed, view, grip)

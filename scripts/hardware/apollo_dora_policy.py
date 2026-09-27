@@ -17,6 +17,11 @@ from apollo_legacy_state import (
     CheckpointStateAdapter, GRIP_ACTION_NAMES, STATE_NAMES, current_tcp_to_training_state,
 )
 from apollo_parked_state import SessionParkedStateAdapter
+from apollo_task_guard import (
+    DRAWER_TASK_LIMITS, LAMP_TASK_LIMITS, LAMP_TASK_ROW_DT_S,
+    DrawerTaskGuard, LampTaskGuard,
+)
+from apollo_gripper_reference import PublishedGripperReference, slew_gripper_targets
 
 
 class ApolloDoraPolicy:
@@ -29,7 +34,9 @@ class ApolloDoraPolicy:
                  clock=time.monotonic, shadow_constant_diagnostic=False,
                  confirm_parked_setup=False, align_to_training_hemisphere=False,
                  bounded_rollout=False, supervised_approach=False, action_row_dt_s=.04,
-                 extended_approach=False):
+                 extended_approach=False, supervised_grasp=False, supervised_drawer_task=False,
+                 supervised_lamp_task=False,
+                 gripper_reference_slew=False, lamp_slow_clock=False):
         if shadow_constant_diagnostic and execute_session is not None:
             raise ValueError('Constant-feature diagnostic is shadow only; motion is forbidden')
         self.shadow_constant_diagnostic = bool(shadow_constant_diagnostic)
@@ -40,29 +47,73 @@ class ApolloDoraPolicy:
         self.bounded_rollout = bool(bounded_rollout)
         self.supervised_approach = bool(supervised_approach)
         self.extended_approach = bool(extended_approach)
+        self.supervised_grasp = bool(supervised_grasp)
+        self.supervised_drawer_task = bool(supervised_drawer_task)
+        self.supervised_lamp_task = bool(supervised_lamp_task)
+        # Full lamp execution uses the same executor speed cap as the verified
+        # successful absolute demonstration replay.  The learned row clock
+        # remains independently slowed to 400 ms.
+        self.session_speed_scale = .6 if supervised_lamp_task else .1
+        full_task = self.supervised_drawer_task or self.supervised_lamp_task
+        if self.supervised_drawer_task and self.supervised_lamp_task:
+            raise ValueError('Choose one full-task envelope')
+        self.gripper_reference_slew = bool(gripper_reference_slew)
+        self.gripper_reference_max_step = (.05 if supervised_lamp_task else .06)
+        if lamp_slow_clock and (not supervised_approach or not bounded_rollout
+                or action_row_dt_s != .4 or max_chunks > 3 or action_rows != 8
+                or full_task or supervised_grasp or extended_approach):
+            raise ValueError('Lamp slow clock requires the unchanged three-chunk approach profile')
+        if gripper_reference_slew and not full_task:
+            raise ValueError('Gripper reference slew requires a supervised full-task profile')
+        if supervised_drawer_task and (supervised_approach or extended_approach or supervised_grasp
+                or not bounded_rollout or action_row_dt_s not in (.2,.4) or action_rows != 8
+                or execute_session is not None):
+            raise ValueError('Drawer task requires its own fresh bounded grant and eight 200 or 400 ms rows')
+        if supervised_lamp_task and (supervised_approach or extended_approach or supervised_grasp
+                or not bounded_rollout or action_row_dt_s not in (.04, LAMP_TASK_ROW_DT_S)
+                or action_rows != 8
+                or execute_session is not None):
+            raise ValueError('Lamp task requires a fresh bounded grant and eight native-delta or 15 Hz absolute rows')
+        if supervised_grasp and (supervised_approach or extended_approach
+                                 or not bounded_rollout or action_row_dt_s != .2):
+            raise ValueError('Grasp stage requires its own bounded profile and 200 ms rows')
         if extended_approach and (not supervised_approach or action_row_dt_s != .2):
             raise ValueError('Extended approach requires the reviewed slow approach clock')
-        if action_row_dt_s not in (.04,.2):
-            raise ValueError('Only native 40 ms or reviewed slow-approach 200 ms rows are supported')
-        if action_row_dt_s != .04 and (not supervised_approach or max_chunks > (12 if extended_approach else 3)):
+        if action_row_dt_s not in (.04,LAMP_TASK_ROW_DT_S,.2,.4) or (action_row_dt_s == .4 and not (full_task or lamp_slow_clock)):
+            raise ValueError('400 ms rows require a supervised full-task or reviewed lamp profile')
+        if action_row_dt_s != .04 and (not (supervised_approach or supervised_grasp or full_task)
+                or max_chunks > (100 if supervised_lamp_task else 150 if supervised_drawer_task
+                                  else 12 if extended_approach or supervised_grasp else 3)):
             raise ValueError('Slow execution requires the supervised approach profile, at most three chunks')
         self.chunk_dt_s = float(action_row_dt_s)
         self.last_prediction_started = float('-inf')
         if supervised_approach and not bounded_rollout:
             raise ValueError('Supervised approach requires an explicit bounded-rollout grant')
-        chunk_cap = 12 if extended_approach else (8 if supervised_approach else 3)
-        self.authorization_window = 30 if extended_approach else 10
-        self.translation_budget = .25 if extended_approach else (.08 if supervised_approach else .01)
-        self.prefix_translation_budget = .04 if supervised_approach else .01
+        self.chunk_cap = (100 if supervised_lamp_task else 150 if supervised_drawer_task else
+                          12 if extended_approach or supervised_grasp else (8 if supervised_approach else 3))
+        self.authorization_window = (360 if supervised_lamp_task else
+            (550 if action_row_dt_s == .4 else 300) if supervised_drawer_task else
+            30 if extended_approach or supervised_grasp else 10)
+        if lamp_slow_clock:
+            self.authorization_window = 20
+        self.translation_budget = (LAMP_TASK_LIMITS['total_translation_path_m'] if supervised_lamp_task
+            else 2. if supervised_drawer_task else .25 if extended_approach or supervised_grasp
+            else (.08 if supervised_approach else .01))
+        self.rotation_budget = (LAMP_TASK_LIMITS['total_rotation_path_rad'] if supervised_lamp_task
+            else 1.5 if supervised_drawer_task else .15)
+        self.prefix_translation_budget = (LAMP_TASK_LIMITS['prefix_translation_path_m']
+            if supervised_lamp_task else .04 if supervised_approach or supervised_grasp or supervised_drawer_task else .01)
+        self.row_translation_budget = (LAMP_TASK_LIMITS['row_translation_m']
+            if supervised_lamp_task else .006)
         if bounded_rollout and (not confirm_parked_setup or not align_to_training_hemisphere
-                                or not 1 <= max_chunks <= chunk_cap or max_seconds > self.authorization_window):
+                                or not 1 <= max_chunks <= self.chunk_cap or max_seconds > self.authorization_window):
             raise ValueError('Bounded rollout requires calibrated inputs and a finite short-trial budget')
         if (confirm_parked_setup and execute_session is not None and not bounded_rollout
                 and (max_chunks != 1 or action_rows != 1)):
             raise ValueError('Parked calibration commissioning permits only one predicted row')
         if confirm_parked_setup and output is None:
             raise ValueError('Parked calibration requires an audit output directory')
-        if not 1 <= max_chunks <= 400 or not 0 < max_seconds <= 120:
+        if not 1 <= max_chunks <= 400 or not 0 < max_seconds <= (self.authorization_window if full_task else 120):
             raise ValueError('Execution budget must be bounded')
         if execute_session is not None and not str(execute_session).strip():
             raise ValueError('An explicit nonempty session ID is required')
@@ -74,6 +125,10 @@ class ApolloDoraPolicy:
             from apollo_predictor import ApolloPredictor
             predictor = ApolloPredictor(checkpoint, device=device)
         self.predictor = predictor
+        if supervised_drawer_task and getattr(predictor, 'task', None) != 'Drawer Assembling':
+            raise ValueError('This task envelope is only for the drawer-assembling checkpoint')
+        if supervised_lamp_task and getattr(predictor, 'task', None) != 'Lamp Assembling':
+            raise ValueError('This task envelope is only for the lamp-assembling checkpoint')
         self.state_adapter = CheckpointStateAdapter(checkpoint)
         self.parked_adapter = (SessionParkedStateAdapter(
             self.state_adapter, operator_confirmed=True,
@@ -97,13 +152,20 @@ class ApolloDoraPolicy:
         self.output = Path(output) if output else None
         if self.output:
             self.output.mkdir(parents=True, exist_ok=False)
-        self.detail = 'legacy observation compatibility; grip only; 25 Hz rows; shadow by default'
+        self.detail = f'{self.state_adapter.pose_convention} observations; grip only; shadow by default'
         self.authorization_file = None
         self.authorization_consumed = False
         self.authorization_purpose = 'SUPERVISED_ONE_ROW'
         self.translation_path_used = 0.
         self.rotation_path_used = 0.
         self.initial_gripper = None
+        self.gripper_path_used = 0.
+        self.last_gripper_target = None
+        self.task_guard = (LampTaskGuard() if supervised_lamp_task else
+                           DrawerTaskGuard() if supervised_drawer_task else None)
+        self.gripper_reference = PublishedGripperReference()
+        self.last_chunk_published_at = float('-inf')
+        self.lamp_gripper_phase = 'open'
 
     def await_one_row_authorization(self, path):
         """Opt in to ONE future session identified by our supervised helper.
@@ -121,21 +183,26 @@ class ApolloDoraPolicy:
         self.authorization_file = path
 
     def await_bounded_rollout_authorization(self, path):
-        """Short rollout; explicit approach profile permits up to 80 mm total.
+        """Opt in to one finite, session-specific rollout.
 
-        Commissioning remains 10 mm. Both preserve the 0.15 rad total rotation
-        and 0.1 gripper-change limits; this is not a full grasp/task profile.
+        Existing commissioning/approach profiles retain their limits. The distinct
+        grasp stage keeps the extended approach's pose/clock limits but allows
+        gradual gripper motion. It is not full-task or unattended authorization.
         """
         path = Path(path)
         if (not self.bounded_rollout or self.execute_session is not None
                 or self.shadow_constant_diagnostic or self.parked_adapter is None
                 or not self.parked_adapter.align_to_training_hemisphere
-                or not 1 <= self.max_chunks <= (12 if self.extended_approach else
-                                               (8 if self.supervised_approach else 3)) or self.output is None
+                or not 1 <= self.max_chunks <= self.chunk_cap or self.output is None
                 or self.authorization_file is not None or path.exists()):
             raise ValueError('Requires a new bounded-rollout authorization and calibrated inputs')
         self.authorization_file = path
-        self.authorization_purpose = ('SUPERVISED_EXTENDED_APPROACH' if self.extended_approach else
+        self.authorization_purpose = ('SUPERVISED_LAMP_TASK_SLEW' if self.gripper_reference_slew and self.supervised_lamp_task else
+                                      'SUPERVISED_DRAWER_TASK_SLEW' if self.gripper_reference_slew else
+                                      'SUPERVISED_LAMP_TASK' if self.supervised_lamp_task else
+                                      'SUPERVISED_DRAWER_TASK' if self.supervised_drawer_task else
+                                      'SUPERVISED_GRASP_STAGE' if self.supervised_grasp else
+                                      'SUPERVISED_EXTENDED_APPROACH' if self.extended_approach else
                                       'SUPERVISED_APPROACH' if self.supervised_approach
                                       else 'SUPERVISED_BOUNDED_ROLLOUT')
 
@@ -157,18 +224,35 @@ class ApolloDoraPolicy:
                     or grant.get('action_rows') != self.chunk_len or grant.get('max_chunks') != self.max_chunks):
                 raise ValueError('Authorization does not match the current one-row policy/session')
             if self.bounded_rollout and (grant.get('total_translation_path_m') != self.translation_budget
-                                         or grant.get('total_rotation_path_rad') != .15
-                                         or grant.get('total_gripper_change') != .1):
+                                         or grant.get('total_rotation_path_rad') != self.rotation_budget
+                                         or (not (self.supervised_grasp or self.supervised_drawer_task or self.supervised_lamp_task) and
+                                             grant.get('total_gripper_change') != .1)):
                 raise ValueError('Bounded rollout must retain the total commissioning displacement limits')
-            if self.supervised_approach and (grant.get('prefix_translation_path_m') != .04
+            if (self.supervised_approach or self.supervised_grasp) and (grant.get('prefix_translation_path_m') != .04
                                              or grant.get('row_translation_m') != .006):
                 raise ValueError('Approach grant must preserve the prefix and row displacement limits')
+            if self.supervised_grasp and any(grant.get(k) != v for k, v in {
+                    'first_gripper_target_change': .1, 'row_gripper_target_change': .06,
+                    'prefix_gripper_target_path': .45, 'total_gripper_target_path': 1.,
+            }.items()):
+                raise ValueError('Grasp grant must preserve the gradual gripper-motion limits')
+            if self.supervised_drawer_task and any(grant.get(k) != v for k, v in DRAWER_TASK_LIMITS.items()):
+                raise ValueError('Drawer-task grant must match every reviewed limit')
+            if self.supervised_lamp_task and any(grant.get(k) != v for k, v in LAMP_TASK_LIMITS.items()):
+                raise ValueError('Lamp-task grant must match every reviewed limit')
+            if (grant.get('gripper_reference_slew', False) is not self.gripper_reference_slew
+                    or (self.gripper_reference_slew and
+                        grant.get('gripper_reference_max_step') != self.gripper_reference_max_step)):
+                raise ValueError('Grant must explicitly match gripper reference filtering')
             deadline = float(grant['expires_t_mono'])
             if not 0 < deadline-self.clock() <= self.authorization_window:
-                raise ValueError('Authorization expired or exceeds ten seconds')
+                raise ValueError('Authorization expired or exceeds the selected time limit')
             spec = self.session.get('spec') or {}
-            if spec.get('start_from') != 'keep_current' or not 0 < float(spec.get('speed_scale',1)) <= .1:
-                raise ValueError('Authorization requires keep_current and at most 10% configured speed')
+            speed = float(spec.get('speed_scale', 1))
+            if (spec.get('start_from') != 'keep_current'
+                    or (self.supervised_lamp_task and speed != self.session_speed_scale)
+                    or (not self.supervised_lamp_task and not 0 < speed <= self.session_speed_scale)):
+                raise ValueError('Authorization session speed does not match the reviewed profile')
             (self.output/'consumed_authorization.json').write_text(json.dumps(grant,indent=2)+'\n')
             self.deadline = deadline
             self.execute_session = grant['session_id']
@@ -211,7 +295,9 @@ class ApolloDoraPolicy:
         spec = s.get('spec') or {}
         if self.execute_session:
             speed = float(spec.get('speed_scale', 1))
-            if spec.get('start_from') != 'keep_current' or not 0 < speed <= .1:
+            if (spec.get('start_from') != 'keep_current'
+                    or (self.supervised_lamp_task and speed != self.session_speed_scale)
+                    or (not self.supervised_lamp_task and not 0 < speed <= self.session_speed_scale)):
                 return False
         return spec.get('mode') == 'inference'
 
@@ -226,6 +312,55 @@ class ApolloDoraPolicy:
         return (self._execution_permitted()
                 and (self.parked_adapter is None or (
                     self.parked_adapter.ready and not self.parked_adapter.invalid)))
+
+    def _validate_grasp_gripper(self, targets, measured):
+        """Reject abrupt or excessive targets, without modifying learned actions.
+
+        Use measured opening for every prefix's first-target jump, and successive
+        published targets for cumulative path. This prevents chunk boundaries or
+        noisy reversals from concealing excessive commanded motion. It does not
+        establish clearance, contact force, or grasp success.
+        """
+        previous = measured if self.last_gripper_target is None else self.last_gripper_target
+        path = float(np.abs(np.diff(np.r_[previous, targets])).sum())
+        if (not np.isfinite(measured) or not 0 <= measured <= 1
+                or abs(float(targets[0])-measured) > .1
+                or abs(float(targets[0])-previous) > .1
+                or np.any(np.abs(np.diff(targets)) > .06)
+                or path > .45 or self.gripper_path_used+path > 1.):
+            raise ValueError('Prediction exceeds grasp-stage gripper budget')
+        return path
+
+    def _filter_lamp_gripper(self, raw_targets, previous, state):
+        """Debounce the lamp grasp as an event while preserving gradual commands.
+
+        A receding-horizon prediction jitters around the close target.  Counting
+        every reversal as new physical travel can stop a valid contact, and an
+        upward fluctuation can release the shade mid-transport.  Once closure
+        begins, keep the reference monotone until the TCP reaches the demonstrated
+        placement region and the model proposes reopening; then keep it monotone
+        open.  Raw predictions remain in the audit log.
+        """
+        raw_targets = np.asarray(raw_targets, dtype=np.float64)
+        previous = float(previous)
+        xyz = np.asarray(state[9:12], dtype=np.float64)
+        in_release_region = bool(xyz[0] >= .62 and xyz[1] >= .155 and xyz[2] >= .05)
+        if self.lamp_gripper_phase == 'open':
+            if float(np.min(raw_targets)) > .8:
+                return np.full_like(raw_targets, previous, dtype=np.float64)
+            self.lamp_gripper_phase = 'closing'
+        if (self.lamp_gripper_phase in {'closing', 'closed'} and in_release_region
+                and float(np.max(raw_targets)) >= .7):
+            self.lamp_gripper_phase = 'opening'
+        targets = slew_gripper_targets(
+            raw_targets, previous, max_step=self.gripper_reference_max_step)
+        if self.lamp_gripper_phase in {'closing', 'closed'}:
+            targets = np.minimum.accumulate(np.r_[previous, targets])[1:]
+            if float(targets[-1]) <= .35:
+                self.lamp_gripper_phase = 'closed'
+        else:
+            targets = np.maximum.accumulate(np.r_[previous, targets])[1:]
+        return targets
 
     def act(self, obs):
         if not self._session_valid():
@@ -244,6 +379,9 @@ class ApolloDoraPolicy:
             return None
         self.last_observation_id = obs.observation_id
         raw = None
+        commanded = None
+        wire_actions = None
+        gripper_prefix_path = 0.
         try:
             if self.parked_adapter is not None:
                 was_ready = self.parked_adapter.ready
@@ -265,16 +403,25 @@ class ApolloDoraPolicy:
             elif self.shadow_constant_diagnostic:
                 # Hypothesis test only, with publication independently disabled
                 # above. Do not use this branch to authorize learned movement.
-                state = current_tcp_to_training_state(obs.state)
+                state = self.state_adapter.to_training_state(obs.state)
                 difference = state[self.state_adapter.mask]-self.state_adapter.reference[self.state_adapter.mask]
                 state[self.state_adapter.mask] = self.state_adapter.reference[self.state_adapter.mask]
             else:
                 state = self.state_adapter(obs.state)
+            if self.task_guard is not None:
+                target = (self.gripper_reference.at(obs.t_mono) if self.chunk_dt_s == .4
+                          else self.last_gripper_target)
+                self.task_guard.observe(obs.state, obs.t_mono, self.translation_path_used,
+                                        target)
             # Continue fresh parked-state monitoring at the original callback
             # cadence while executing a slower chunk. Never reuse an old image
             # or repeat a row to fill the extended interval.
-            if (self.chunk_dt_s > .04 and
+            if ((self.chunk_dt_s > .04 or self.supervised_lamp_task) and
                     self.clock()-self.last_prediction_started < 8*self.chunk_dt_s):
+                return None
+            # At the slow drawer clock, finish the previous published chunk
+            # before starting inference. This also preserves the slew boundary.
+            if self.chunk_dt_s == .4 and self.clock()-self.last_chunk_published_at < 8*self.chunk_dt_s:
                 return None
             start = self.clock()
             self.last_prediction_started = start
@@ -284,10 +431,19 @@ class ApolloDoraPolicy:
             if (not np.all(raw[:, 7:14] == 0) or not np.all(raw[:, 14] == 1)
                     or not np.all(raw[:, 15] == 0) or np.any((raw[:, 6] < 0) | (raw[:, 6] > 1))):
                 raise ValueError('Parked-arm/rail or gripper contract violated')
+            commanded = raw.copy()
+            if self.gripper_reference_slew:
+                previous = float(obs.state[7]) if self.last_gripper_target is None else self.last_gripper_target
+                if self.supervised_lamp_task:
+                    commanded[:, 6] = self._filter_lamp_gripper(raw[:, 6], previous, obs.state)
+                else:
+                    commanded[:,6] = slew_gripper_targets(
+                        raw[:,6], previous, max_step=self.gripper_reference_max_step)
             if self.execute_session:
                 # Conservative commissioning bounds, not a collision-safety claim.
-                # REFUSE an oversized prediction; do not clip it into a new policy.
-                prefix = raw[:self.chunk_len]
+                # Pose deltas are never clipped. The explicit slew profile ONLY
+                # filters gripper references; raw and sent commands are audited.
+                prefix = commanded[:self.chunk_len]
                 prior_translation = self.translation_path_used if self.bounded_rollout else 0.
                 prior_rotation = self.rotation_path_used if self.bounded_rollout else 0.
                 grip_origin = self.initial_gripper if self.initial_gripper is not None else obs.state[7]
@@ -296,11 +452,20 @@ class ApolloDoraPolicy:
                     raise ValueError('Supervised approach requires an initially open gripper (at least 0.9)')
                 if (prior_translation+distances.sum() > self.translation_budget
                         or distances.sum() > self.prefix_translation_budget
-                        or (self.supervised_approach and distances.max() > .006)
-                        or prior_rotation+np.linalg.norm(prefix[:, 3:6], axis=1).sum() > .15
-                        or (self.bounded_rollout and np.max(np.abs(prefix[:,6]-grip_origin)) > .1)
-                        or np.max(np.abs(prefix[:, 6]-obs.state[7])) > .1):
+                        or ((self.supervised_approach or self.supervised_grasp or self.supervised_drawer_task
+                             or self.supervised_lamp_task) and distances.max() > self.row_translation_budget)
+                        or prior_rotation+np.linalg.norm(prefix[:, 3:6], axis=1).sum() > self.rotation_budget
+                        or (not (self.supervised_grasp or self.supervised_drawer_task or self.supervised_lamp_task) and (
+                            (self.bounded_rollout and np.max(np.abs(prefix[:,6]-grip_origin)) > .1)
+                            or np.max(np.abs(prefix[:, 6]-obs.state[7])) > .1))):
                     raise ValueError('Prediction exceeds first-trial displacement/gripper budget')
+                if self.supervised_grasp:
+                    gripper_prefix_path = self._validate_grasp_gripper(prefix[:,6], float(obs.state[7]))
+                if self.task_guard is not None:
+                    self.task_guard.check_prefix(obs.state, prefix)
+                    gripper_prefix_path = self.task_guard.gripper_path(
+                        prefix[:,6], float(obs.state[7]), self.last_gripper_target, self.gripper_path_used)
+            wire_actions = self._encode_for_transport(obs, commanded[:self.chunk_len])
         except Exception as exc:
             self.disarm('invalid input or failed prediction')
             # A refused input is particularly useful for commissioning: preserve
@@ -313,6 +478,8 @@ class ApolloDoraPolicy:
                             json.dumps(self.parked_adapter.report(), indent=2)+'\n')
                     name = f'refused_observation_{obs.observation_id:06d}.npz'
                     proposed = ({'proposed_actions':raw} if isinstance(raw,np.ndarray) else {})
+                    if commanded is not None:
+                        proposed['candidate_commanded_actions'] = commanded
                     np.savez_compressed(
                         self.output/name, current_state=np.asarray(obs.state),
                         view_rgb=np.asarray(obs.images['view_wrist']),
@@ -346,10 +513,20 @@ class ApolloDoraPolicy:
                'bounded_rollout': self.bounded_rollout,
                'supervised_approach': self.supervised_approach,
                'extended_approach': self.extended_approach,
+               'supervised_grasp': self.supervised_grasp,
+               'supervised_drawer_task': self.supervised_drawer_task,
+               'supervised_lamp_task': self.supervised_lamp_task,
+               'gripper_reference_slew': self.gripper_reference_slew,
+               'lamp_gripper_phase': self.lamp_gripper_phase if self.supervised_lamp_task else None,
+               'gripper_target_path_used_before': self.gripper_path_used,
+               'gripper_target_path_prefix': gripper_prefix_path,
                'translation_budget_m': self.translation_budget,
                'translation_path_used_before_m': self.translation_path_used,
                'current_state': np.asarray(obs.state).tolist(),
-               'actions_grip': raw[:, :8].tolist()}
+               'wire_action_space': self.spec.action_space,
+               'wire_actions': wire_actions.tolist(),
+               'actions_grip': commanded[:, :8].tolist(),
+               'raw_actions_grip': raw[:, :8].tolist()}
         if self.shadow_constant_diagnostic:
             row['constant_feature_differences'] = {
                 STATE_NAMES[i]: float(delta)
@@ -366,10 +543,21 @@ class ApolloDoraPolicy:
         self.returned_chunks += 1
         self.translation_path_used += float(np.linalg.norm(raw[:self.chunk_len,:3],axis=1).sum())
         self.rotation_path_used += float(np.linalg.norm(raw[:self.chunk_len,3:6],axis=1).sum())
+        self.gripper_path_used += gripper_prefix_path
+        self.last_gripper_target = float(commanded[self.chunk_len-1,6])
+        self.last_chunk_published_at = self.clock()
+        self.gripper_reference.record(commanded[:self.chunk_len,6], self.last_chunk_published_at, self.chunk_dt_s)
         if self.initial_gripper is None:
             self.initial_gripper = float(obs.state[7])
         self.last_status = f'Bounded trial: {self.returned_chunks}/{self.max_chunks} chunks returned'
-        return PolicyOutput(raw[:self.chunk_len, :8].copy(), self.spec.version, obs.t_mono)
+        self._commit_transport()
+        return PolicyOutput(wire_actions, self.spec.version, obs.t_mono)
+
+    def _encode_for_transport(self, obs, prefix):
+        return prefix[:, :8].copy()
+
+    def _commit_transport(self):
+        pass
 
     def pop_status(self):
         status, self.last_status = self.last_status, None

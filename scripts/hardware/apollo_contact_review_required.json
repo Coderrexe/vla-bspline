@@ -1,0 +1,17 @@
+{
+  "status": "CONTACT_REVIEW_REQUIRED",
+  "reported_on": "2026-09-13",
+  "trial": "drawer_trial_025",
+  "session_id": "bdc81255faca477a976014bfc7c2b5f9",
+  "operator_report": "Arm touched the work surface near the knob; operator subsequently reset the arm.",
+  "physical_inspection_confirmed": false,
+  "table_clearance_calibrated": false,
+  "evidence": "reports/drawer_table_coverage_046.json",
+  "scope": "Our motion launchers only; does not stop or change the shared runtime or teleoperation.",
+  "release_requirements": [
+    "On-site lab review of contact and hardware condition.",
+    "Verified coverage of the actual work surface and installed gripper geometry.",
+    "Offline and lab-approved clearance validation including startup motion.",
+    "A revised, reviewed trial plan addressing the missed first grasp."
+  ]
+}

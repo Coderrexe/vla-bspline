@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 
 def main():
@@ -33,10 +34,14 @@ def main():
                         for y in x.get('arms',[])) for x in running))
     if published:
         actions=np.concatenate([np.asarray(x['actions_grip'])[:x['execution_rows']] for x in published])
+        requested_rotation = Rotation.identity()
+        for row in actions:
+            requested_rotation = Rotation.from_rotvec(row[3:6])*requested_rotation
         report.update(published_rows=len(actions),
                       requested_translation_sum_mm=(actions[:,:3].sum(0)*1000).tolist(),
                       requested_translation_path_mm=float(np.linalg.norm(actions[:,:3],axis=1).sum()*1000),
                       requested_final_gripper=float(actions[-1,6]),
+                      requested_rotation_net_rad=requested_rotation.as_rotvec().tolist(),
                       compute_ms=[x['compute_ms'] for x in published])
     first=next((i for i,x in enumerate(running) if x.get('external',{}).get('action_age_s') is not None),None)
     if first is not None and first>0:
@@ -45,11 +50,18 @@ def main():
         for name in ('grip','view'):
             a,z=[next(y for y in x['arms'] if y['arm_id']==name) for x in (before,after)]
             delta=np.asarray(z['ee_pose']['position'])-a['ee_pose']['position']
+            ra, rz = [Rotation.from_quat(np.asarray(x['ee_pose']['orientation'])[[1,2,3,0]])
+                      for x in (a, z)]
+            measured_rotation = rz*ra.inv()
             report['arms'][name]={'measured_tcp_delta_mm':(delta*1000).tolist(),
                 'measured_tcp_displacement_mm':float(np.linalg.norm(delta)*1000),
                 'max_joint_change_rad':float(np.max(np.abs(np.asarray(z['q'])-a['q']))),
                 'rail_delta_m':z['rail_pos_m']-a['rail_pos_m'],
+                'measured_rotation_net_rad':measured_rotation.as_rotvec().tolist(),
                 'gripper_before':a['gripper_open_frac'],'gripper_after':z['gripper_open_frac']}
+            if name == 'grip' and published:
+                report['arms'][name]['net_rotation_tracking_error_deg'] = float(np.degrees(
+                    (measured_rotation*requested_rotation.inv()).magnitude()))
         if args.video:
             from PIL import Image,ImageDraw
             targets=np.linspace(before['ts'],after['ts'],4).tolist()

@@ -1,0 +1,17 @@
+{
+  "review_id": "lamp_reset_approach_20260913_2037",
+  "scope": "SUPERVISED_LAMP_APPROACH",
+  "contact_marker_sha256": "bd595e3aba14404c9fcc8f585b423205462371c21fa1a43a80b08945393a27bd",
+  "operator_confirmed_lamp_clearance": true,
+  "operator_confirmed_recorded_start_reset": true,
+  "operator_present": true,
+  "operator_statement": "yes. do you need me to do anything or do you got it?",
+  "confirmation_context": "Reply to the explicit question about clearance for both arms and the base during the recorded-start reset.",
+  "confirmed_at_utc": "2026-09-14T00:37:51+00:00",
+  "valid_until_utc": "2026-09-14T01:30:00+00:00",
+  "reset_repo_id": "bc_demo/lamp_assembling",
+  "reset_episode_id": "20260911T204950.391Z-538dc8",
+  "allowed_policy_ids": ["vla_lamp_assembling_spline_20260912", "vla_lamp_assembling_waypoint_20260912", "vla_lamp_recorded_prefix_20260913", "vla_lamp_assembling_spline_20260912_abs", "vla_lamp_assembling_waypoint_20260912_abs", "vla_lamp_recorded_prefix_20260913_abs"],
+  "restriction": "Existing planned recorded-start reset, monitored within a near-start high-clearance region; then at most three eight-row approach chunks at 200 ms/row or the slower 400 ms absolute-pose clock. Policy TCP z >= 0.10 m and opening >= 0.85. No full replay, assembly, or drawer/cabinet permission.",
+  "existing_contact_hold": "Unchanged for all other motion paths. No shared runtime, driver, or scene changes."
+}

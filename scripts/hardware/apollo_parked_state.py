@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from apollo_legacy_state import STATE_NAMES, current_tcp_to_training_state, align_quaternion_hemisphere
+from apollo_legacy_state import STATE_NAMES, align_quaternion_hemisphere
 
 
 class SessionParkedStateAdapter:
@@ -33,6 +33,7 @@ class SessionParkedStateAdapter:
         if not np.array_equal(checkpoint_adapter.mask, expected):
             raise ValueError('Only the audited 17 constant Apollo inputs may be calibrated')
         self.model_reference = checkpoint_adapter.reference.copy()
+        self.checkpoint_adapter = checkpoint_adapter
         self.model_mean = checkpoint_adapter.mean.copy()
         self.align_to_training_hemisphere = bool(align_to_training_hemisphere)
         if not np.isfinite(self.model_reference).all():
@@ -73,7 +74,7 @@ class SessionParkedStateAdapter:
         raw = np.asarray(current_state, dtype=np.float32)
         if raw.shape != (32,):
             raise ValueError('Calibration requires a single 32-field observation')
-        training_state = current_tcp_to_training_state(raw)  # also validates pose/finite values
+        training_state = self.checkpoint_adapter.to_training_state(raw)
         if np.any((raw[[7, 23]] < 0) | (raw[[7, 23]] > 1)):
             raise ValueError('Gripper opening must be a measured fraction in [0,1]')
         if self.last_t is not None and not 0 < t_mono-self.last_t <= .75:
@@ -121,10 +122,11 @@ class SessionParkedStateAdapter:
                   'calibration_indices': np.flatnonzero(self.calibration_mask).tolist(),
                   'reloadable_for_execution': False}
         result['training_hemisphere_alignment'] = self.align_to_training_hemisphere
+        result['state_pose_convention'] = self.checkpoint_adapter.pose_convention
         if self.reference is not None:
-            legacy = current_tcp_to_training_state(self.reference)
+            converted = self.checkpoint_adapter.to_training_state(self.reference)
             result.update(current_reference=self.reference.tolist(),
                           calibration_span_by_field=(self.high-self.low).tolist(),
                           model_constant_reference=self.model_reference[self.mask].tolist(),
-                          legacy_minus_training_constants=(legacy-self.model_reference)[self.mask].tolist())
+                          converted_minus_training_constants=(converted-self.model_reference)[self.mask].tolist())
         return result

@@ -55,6 +55,7 @@ def main():
     frames, states, counts, rows = {}, None, Counter(), []
     report = {'mode': 'READ_ONLY_OBSERVER', 'action_messages_sent': 0,
               'runtime_api_writes': 0, 'checkpoint': str(args.checkpoint),
+              'state_pose_convention': state_adapter.pose_convention,
               'dataflow_id': info['dataflow_id'], 'predictions': rows,
               'constant_feature_diagnostic': args.diagnose_constant_features}
     start = time.monotonic()
@@ -102,8 +103,10 @@ def main():
             try:
                 legacy = state_adapter(current)
             except ValueError as exc:
-                from apollo_legacy_state import current_tcp_to_training_state, STATE_NAMES
-                converted = current_tcp_to_training_state(current)
+                from apollo_legacy_state import STATE_NAMES
+                # Refusal diagnostics must use the checkpoint's convention too:
+                # lamp uses corrected TCP, unlike the older drawer recordings.
+                converted = state_adapter.to_training_state(current)
                 report['refusal'] = str(exc)
                 report['constant_feature_differences'] = [
                     {'name': STATE_NAMES[i], 'current': float(converted[i]),
@@ -128,6 +131,8 @@ def main():
                    'state_age_at_prediction_s': now-stamp, 'image_ages_s': ages,
                    'image_seq': {k: v[2] for k, v in frames.items()},
                    'arm_state_source': state_meta.get('source'),
+                   'measured_gripper_open_fraction': float(current[7]),
+                   'model_input_gripper_open_fraction': float(legacy[7]),
                    'grip_rail_m': float(current[8]), 'view_rail_m': float(current[24]),
                    'action_shape': list(actions.shape), 'finite': bool(np.isfinite(actions).all()),
                    'first_action_grip': actions[0, :8].tolist(),

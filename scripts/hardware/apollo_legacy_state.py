@@ -149,6 +149,27 @@ class CheckpointStateAdapter:
         from pathlib import Path
         from safetensors.numpy import load_file
         checkpoint = Path(checkpoint)
+        contract_path = checkpoint/'apollo_observation_contract.json'
+        if contract_path.exists():
+            contract = json.loads(contract_path.read_text())
+            if (contract.get('schema_version') != 1
+                    or contract.get('state_pose_convention') not in ('corrected_tcp', 'legacy_flange_intrinsic_xyz')
+                    or contract.get('action_pose_convention') != 'base_frame_delta_translation_and_spatial_rotvec'
+                    or contract.get('gripper') != 'absolute_open_fraction_0_to_1'):
+                raise ValueError('Unknown Apollo checkpoint observation/action contract')
+            self.pose_convention = contract['state_pose_convention']
+            expected_legacy = self.pose_convention == 'legacy_flange_intrinsic_xyz'
+            if contract.get('legacy_observation_conversion') is not expected_legacy:
+                raise ValueError('Inconsistent Apollo observation conversion contract')
+        else:
+            # Backward compatibility is restricted to the two audited original
+            # task datasets. A new task must not silently inherit the old bug.
+            provenance_path = checkpoint/'dataset_provenance.json'
+            if provenance_path.exists():
+                task = json.loads(provenance_path.read_text()).get('task')
+                if task not in ('Drawer Assembling', 'Cabinet Assembling'):
+                    raise ValueError('This task requires an explicit Apollo observation contract')
+            self.pose_convention = 'legacy_flange_intrinsic_xyz'
         info = json.loads((checkpoint/'apollo_interface.json').read_text())
         if info['features']['observation.state']['names'] != STATE_NAMES:
             raise ValueError('Checkpoint state ordering is not the audited Apollo interface')
@@ -162,6 +183,21 @@ class CheckpointStateAdapter:
                      & (stats['observation.state.std'] == 0))
         if self.reference.shape != (32,) or self.mask.shape != (32,) or self.mean.shape != (32,):
             raise ValueError('State statistics shape mismatch')
+        if self.pose_convention == 'corrected_tcp':
+            # Lamp includes native and backfilled FK records. The parked view
+            # quaternion differs by float rounding (~1e-8), not physical motion.
+            # Its tiny nonzero std is unsuitable for accepting live pose noise.
+            # Only the physically parked channels may get this treatment. Any
+            # real dataset variation on those channels requires a new interface.
+            parked = np.zeros(32, dtype=bool)
+            parked[8] = True; parked[16:] = True
+            span = stats['observation.state.max']-stats['observation.state.min']
+            if np.any(span[parked] > 1e-6) or np.any(stats['observation.state.std'][parked] > 1e-6):
+                raise ValueError('Corrected TCP checkpoint has nonstationary parked features')
+            if np.any(self.mask & ~parked):
+                raise ValueError('Unexpected constant active-arm feature')
+            self.mask = parked
+            self.reference[parked] = self.mean[parked]
         if not 0 < tolerance <= 1e-3:
             raise ValueError('Do not widen the audited constant-feature compatibility band')
         self.tolerance = tolerance
@@ -187,5 +223,19 @@ class CheckpointStateAdapter:
         out[..., self.mask] = self.reference[self.mask]
         return out
 
+    def to_training_state(self, current_state):
+        """Convert observations only; corrected TCP checkpoints use identity."""
+        if self.pose_convention == 'legacy_flange_intrinsic_xyz':
+            return current_tcp_to_training_state(current_state)
+        out, shape = _state_batch(current_state)
+        return out.reshape(shape).astype(np.float32)
+
     def __call__(self, current_state):
-        return self.stabilize_training_state(current_tcp_to_training_state(current_state))
+        return self.stabilize_training_state(self.to_training_state(current_state))
+
+    def to_current_state(self, recorded_state):
+        """Recorded-input fixture conversion; not a motion target or command."""
+        if self.pose_convention == 'legacy_flange_intrinsic_xyz':
+            return training_to_current_tcp_state(recorded_state)
+        out, shape = _state_batch(recorded_state)
+        return out.reshape(shape).astype(np.float32)

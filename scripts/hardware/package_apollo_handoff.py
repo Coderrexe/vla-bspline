@@ -9,6 +9,7 @@ from pathlib import Path
 import av
 import numpy as np
 import pyarrow.parquet as pq
+from apollo_legacy_state import CheckpointStateAdapter
 
 
 def digest(path):
@@ -24,18 +25,31 @@ def main():
     p.add_argument('--root', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--run', action='append', required=True)
+    p.add_argument('--selection', type=Path,
+                   help='Frozen offline checkpoint selection: JSON selected_steps maps run names to update counts')
     args = p.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     report = {'verified_models': [], 'not_ready': []}
+    selection = json.loads(args.selection.read_text()) if args.selection else None
+    if selection is not None:
+        if set(selection['selected_steps']) != set(args.run):
+            raise ValueError('Selection must name exactly the requested runs')
+        shutil.copy2(args.selection, args.output/'checkpoint_selection.json')
     for name in args.run:
         run = args.root / 'outputs' / name
-        validation = run / 'offline_validation.json'
-        checkpoint = run / 'checkpoints/last/pretrained_model'
+        step = int(selection['selected_steps'][name]) if selection else None
+        if step is not None and step <= 0:
+            raise ValueError('Selected update count must be positive')
+        label = f'{step:06d}' if step is not None else 'last'
+        validation = run / (f'offline_validation_{label}.json' if step is not None else 'offline_validation.json')
+        checkpoint = run / 'checkpoints' / label / 'pretrained_model'
         if not validation.is_file() or not (checkpoint / 'hardware_training_manifest.json').is_file():
             report['not_ready'].append({'run': name, 'reason': 'Training or prediction verification did not finish'})
             continue
         result = json.loads(validation.read_text())
         training = json.loads((checkpoint / 'hardware_training_manifest.json').read_text())
+        if step is not None and (training['steps'] != step or Path(result['checkpoint']).resolve() != checkpoint.resolve()):
+            raise ValueError('Checkpoint, training step and validation report do not match')
         if result.get('load_predict') != 'PASS' or training.get('initialization_tensor_check', {}).get('status') != 'PASS':
             report['not_ready'].append({'run': name, 'reason': 'Verification is not PASS'})
             continue
@@ -64,6 +78,9 @@ def main():
                    'seed': np.asarray(result['seed'], dtype=np.int64),
                    'source_episode_id': np.asarray(sample['source_episode_id']),
                    'source_frame': np.asarray(sample['frame'], dtype=np.int64)}
+        if 'parked_features_projected_to_checkpoint_reference' in result:
+            fixture['raw_recorded_state'] = fixture['state'].copy()
+            fixture['state'] = CheckpointStateAdapter(checkpoint).stabilize_training_state(fixture['state'])
         for camera in ['view_wrist', 'grip_wrist']:
             with av.open(str(episode / 'video' / f'{camera}.mp4')) as video:
                 for index, frame in enumerate(video.decode(video=0)):
@@ -81,8 +98,10 @@ def main():
             'offline_metrics': result['policy'], 'training_steps': training['steps'],
             'task': training['task'], 'head': training['head'],
         })
-    for name in ['apollo_predictor.py', 'verify_apollo_checkpoint.py']:
+    for name in ['apollo_predictor.py', 'apollo_legacy_state.py', 'verify_apollo_checkpoint.py']:
         shutil.copy2(args.root / 'scripts' / name, args.output / name)
+    if selection is not None:
+        report['checkpoint_selection'] = 'checkpoint_selection.json'
     for name in ['training_source_v1.tar.gz', 'base_initialization.json', 'HARDWARE_TRAINING_2026-09-12.md']:
         shutil.copy2(args.root / 'manifests' / name, args.output / name)
     # Cache the already-used VLM config/tokenizer files, not its pretrained

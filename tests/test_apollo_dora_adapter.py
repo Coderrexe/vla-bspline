@@ -33,6 +33,8 @@ class Clock:
 
 
 class Predictor:
+    task = 'Drawer Assembling'
+
     def __init__(self, clock):
         self.clock = clock
         self.delay = .02
@@ -373,6 +375,41 @@ def test_shadow_wire_no_action(setup):
     assert p.predictions == 1 and not any(a.startswith('action') for a,_,_ in stub.sent)
 
 
+def test_initialization_receipt_defers_all_predictions(setup, tmp_path):
+    p, node, stub, event = wire_setup(setup)
+    p.lamp_review_id = 'r'
+    node.initialization_complete = False
+    node.initialization_ready_file = tmp_path/'ready.json'
+    node._on_input(stub, event)
+    assert p.predictions == 0 and p.returned_chunks == 0
+    node.initialization_ready_file.write_text(json.dumps({
+        'purpose': 'LAMP_RECORDED_START_VERIFIED', 'session_id': 'trial1',
+        'epoch': 'epoch1', 'review_id': 'r', 'expires_t_mono': 1010.}))
+    node._on_input(stub, event)
+    assert node.initialization_complete and p.returned_chunks == 1
+
+
+def test_initialization_wrong_receipt_disarms(setup, tmp_path):
+    p, node, stub, event = wire_setup(setup)
+    p.lamp_review_id = 'r'
+    node.initialization_complete = False
+    node.initialization_ready_file = tmp_path/'ready.json'
+    node.initialization_ready_file.write_text('{}')
+    node._on_input(stub, event)
+    assert p.disarmed and p.predictions == 0
+
+
+@pytest.mark.parametrize('initialized,reason,should_disarm', [
+    (False, 'handback', False), (True, 'handback', True),
+    (False, 'anomaly', True), (False, 'session_stop', True)])
+def test_initialization_only_accepts_pre_motion_handback(setup, initialized, reason, should_disarm):
+    p, node, stub, _ = wire_setup(setup, execute=False)
+    node.initialization_complete = initialized
+    node._on_input(stub, json_event('policy_reset', {'reason': reason, 'after_observation_id': 7}))
+    assert p.disarmed == should_disarm
+    assert node._watermark == 7 and p.returned_chunks == 0
+
+
 @pytest.mark.parametrize('field,value',[('epoch','old'),('session_id','other'),
                                       ('quat_order','xyzw'),('engaged_arm','grip')])
 def test_wire_metadata_refusal(setup,field,value):
@@ -419,6 +456,252 @@ def fill_parked_reference(adapter, current):
     for i in range(11):
         assert adapter.adapt(current, session_id='trial1', epoch='epoch1', t_mono=1000+i*.32) is None
     assert adapter.ready
+
+
+def corrected_checkpoint(setup):
+    from safetensors.numpy import load_file
+    checkpoint, _, current, _ = setup
+    path = checkpoint/'policy_preprocessor_step_5_normalizer_processor.safetensors'
+    stats = load_file(str(path))
+    original_mean = stats['observation.state.mean'].copy()
+    for key in ('min', 'max', 'mean'):
+        stats[f'observation.state.{key}'] += current-original_mean
+    save_file(stats, str(path))
+    (checkpoint/'apollo_observation_contract.json').write_text(json.dumps({
+        'schema_version': 1, 'state_pose_convention': 'corrected_tcp',
+        'action_pose_convention': 'base_frame_delta_translation_and_spatial_rotvec',
+        'gripper': 'absolute_open_fraction_0_to_1', 'legacy_observation_conversion': False}))
+    (checkpoint/'dataset_provenance.json').write_text(json.dumps({'task': 'Lamp Assembling'}))
+    return checkpoint
+
+
+def lamp_approach_case(setup, tmp_path, absolute=False, row_dt=.2):
+    from apollo_lamp_approach import LampApproachPolicy, LAMP_APPROACH_LIMITS
+    setup[2][9:12] = [.67, -.015, .166]
+    checkpoint = corrected_checkpoint(setup)
+    predictor = Predictor(setup[3]); predictor.task = 'Lamp Assembling'
+    predictor.raw[:, 0] = -.001
+    policy = LampApproachPolicy(
+        checkpoint, lamp_review_id='lamp-test', absolute_execution=absolute,
+        predictor=predictor, clock=setup[3],
+        max_chunks=3, max_seconds=20 if row_dt == .4 else 10, action_rows=8, bounded_rollout=True,
+        supervised_approach=True, action_row_dt_s=row_dt, confirm_parked_setup=True,
+        align_to_training_hemisphere=True, output=tmp_path/'lamp_policy')
+    path = tmp_path/'lamp_grant.json'
+    policy.await_bounded_rollout_authorization(path)
+    grant = {'purpose':'SUPERVISED_LAMP_APPROACH', 'session_id':'trial1', 'epoch':'epoch1',
+             'policy_id':policy.policy_id, 'action_rows':8, 'max_chunks':3,
+             'expires_t_mono':1020 if row_dt == .4 else 1010, 'chunk_dt_s':row_dt, 'total_translation_path_m':.08,
+             'total_rotation_path_rad':.15, 'total_gripper_change':.1,
+             'prefix_translation_path_m':.04, 'row_translation_m':.006,
+             'lamp_review_id':'lamp-test', 'lamp_approach_limits':LAMP_APPROACH_LIMITS,
+             'wire_action_space': 'abs_ee' if absolute else 'delta_ee'}
+    return policy, path, grant
+
+
+def lamp_session():
+    result = session()
+    result['spec']['task'] = 'Lamp Assembling'
+    return result
+
+
+def test_lamp_absolute_encoding_preserves_native_pose_gripper_and_rail(setup, tmp_path):
+    p, path, grant = lamp_approach_case(setup, tmp_path, absolute=True)
+    p.predictor.raw[:, 4] = .001
+    path.write_text(json.dumps(grant)); calibrate_lamp(p, setup)
+    setup[3].t = 1003.52; p.on_session(lamp_session())
+    obs = observation(setup, oid=12)
+    result = p.act(obs)
+    assert p.spec.action_space == 'abs_ee' and len(p.spec.action_names) == 11
+    assert result.actions.shape == (8, 11)
+    expected_p = obs.state[9:12]+np.cumsum(p.predictor.raw[:, :3], axis=0)
+    np.testing.assert_allclose(result.actions[:, :3], expected_p, atol=1e-7)
+    np.testing.assert_array_equal(result.actions[:, 9], p.predictor.raw[:, 6])
+    from apollo_lamp_approach import stationary_rail_wire_value
+    np.testing.assert_array_equal(result.actions[:, 10], np.full(8, stationary_rail_wire_value(obs.state[8])))
+    r = Rotation.from_quat(obs.state[12:16][[1, 2, 3, 0]])
+    for row, native in zip(result.actions, p.predictor.raw):
+        r = Rotation.from_rotvec(native[3:6])*r
+        np.testing.assert_allclose(row[3:9], np.r_[r.as_matrix()[:,0], r.as_matrix()[:,1]], atol=1e-7)
+    assert p.wire_translation_path < .009
+
+
+def test_lamp_absolute_rejects_wrong_wire_grant(setup, tmp_path):
+    p, path, grant = lamp_approach_case(setup, tmp_path, absolute=True)
+    path.write_text(json.dumps(grant | {'wire_action_space': 'delta_ee'}))
+    p.on_session(lamp_session())
+    with pytest.raises(ValueError, match='differs'): p.act(observation(setup))
+    assert p.returned_chunks == 0
+
+
+def test_lamp_absolute_slow_clock_keeps_three_chunk_motion_limits(setup, tmp_path):
+    p, path, grant = lamp_approach_case(setup, tmp_path, absolute=True, row_dt=.4)
+    assert p.authorization_window == 20 and p.translation_budget == .08 and p.max_chunks == 3
+    path.write_text(json.dumps(grant)); calibrate_lamp(p, setup)
+    setup[3].t = 1003.52; p.on_session(lamp_session())
+    assert p.act(observation(setup, oid=12)).actions.shape == (8,11)
+    setup[3].t = 1003.85; p.on_session(lamp_session())
+    assert p.act(observation(setup, oid=13)) is None
+
+
+def test_lamp_absolute_rejects_large_recorded_anchor_tracking_error(setup, tmp_path):
+    p, path, grant = lamp_approach_case(setup, tmp_path, absolute=True)
+    path.write_text(json.dumps(grant)); calibrate_lamp(p, setup)
+    p.predictor.is_recorded_prefix = True
+    p.absolute_anchor = (setup[2][9:12]+[.02,0,0], p.task_guard.rotation(setup[2]))
+    setup[3].t = 1003.52; p.on_session(lamp_session())
+    with pytest.raises(ValueError, match='unchanged'): p.act(observation(setup, oid=12))
+    assert p.returned_chunks == 0
+
+
+def calibrate_lamp(policy, setup):
+    for i in range(11):
+        setup[3].t = 1000+i*.32
+        policy.on_session(lamp_session())
+        assert policy.act(observation(setup, oid=i+1)) is None
+        assert policy.returned_chunks == 0
+    assert policy.parked_adapter.ready
+
+
+def test_lamp_approach_has_three_exact_chunks_and_stops(setup, tmp_path):
+    policy, path, grant = lamp_approach_case(setup, tmp_path)
+    path.write_text(json.dumps(grant)); calibrate_lamp(policy, setup)
+    returned = 0
+    for i in range(15):
+        setup[3].t = 1003.52+i*.33
+        policy.on_session(lamp_session())
+        result = policy.act(observation(setup, oid=20+i))
+        if result is not None:
+            np.testing.assert_array_equal(result.actions, policy.predictor.raw[:, :8])
+            returned += 1
+    assert returned == 3
+    setup[3].t = 1008.47; policy.on_session(lamp_session())
+    assert policy.act(observation(setup, oid=40)) is None
+    assert policy.returned_chunks == 3
+
+
+@pytest.mark.parametrize('field,value', [
+    ('purpose', 'SUPERVISED_APPROACH'), ('lamp_review_id', 'other'),
+    ('lamp_approach_limits', {}), ('max_chunks', 4), ('chunk_dt_s', .04),
+])
+def test_lamp_grant_cannot_change_scope(setup, tmp_path, field, value):
+    policy, path, grant = lamp_approach_case(setup, tmp_path)
+    path.write_text(json.dumps(grant | {field: value})); policy.on_session(lamp_session())
+    with pytest.raises(ValueError): policy.act(observation(setup))
+    assert policy.disarmed and policy.returned_chunks == 0
+
+
+def test_lamp_rejects_grasp_and_intermediate_floor_crossing():
+    from apollo_lamp_approach import LampApproachGuard, LAMP_APPROACH_LIMITS
+    guard = LampApproachGuard()
+    state = np.zeros(32); state[12] = 1; state[7] = 1
+    state[9:12] = [.67, -.015, .166]
+    guard.observe(state, 0, 0, None)
+    actions = np.zeros((8, 16)); actions[:, 6] = 1
+    state[11] = .101
+    actions[0, 2] = -.002; actions[1, 2] = .002
+    with pytest.raises(ValueError, match='workspace'): guard.check_prefix(state, actions)
+    actions[:, 2] = 0; actions[:, 6] = .8
+    with pytest.raises(ValueError, match='closure'): guard.check_prefix(state, actions)
+
+
+def test_lamp_rejects_unreviewed_start():
+    from apollo_lamp_approach import LampApproachGuard, LAMP_APPROACH_LIMITS
+    state = np.zeros(32); state[12] = 1; state[7] = 1
+    state[9:12] = [.70, -.015, .166]
+    with pytest.raises(ValueError, match='initial pose'):
+        LampApproachGuard().observe(state, 0, 0, None)
+
+
+@pytest.mark.parametrize('position', [
+    [.67335826, -.01202143, .17344430],
+    [.67098469, -.01503715, .16608219],
+    [.66783726, -.01709432, .15815733],
+])
+def test_lamp_start_region_accepts_recorded_startup_positions(position):
+    from apollo_lamp_approach import LampApproachGuard
+    state = np.zeros(32); state[12] = 1; state[7] = 1; state[9:12] = position
+    LampApproachGuard().observe(state, 0, 0, None)
+
+
+@pytest.mark.parametrize('position', [[.64,0,.16],[.68,-.04,.16],[.67,0,.13],[.67,0,.20]])
+def test_lamp_start_region_rejects_unsupported_positions(position):
+    from apollo_lamp_approach import LampApproachGuard
+    state = np.zeros(32); state[12] = 1; state[7] = 1; state[9:12] = position
+    with pytest.raises(ValueError, match='initial pose'):
+        LampApproachGuard().observe(state, 0, 0, None)
+
+
+def test_corrected_tcp_checkpoint_never_applies_legacy_conversion(setup):
+    checkpoint = corrected_checkpoint(setup)
+    adapter = CheckpointStateAdapter(checkpoint)
+    current = setup[2]
+    np.testing.assert_array_equal(adapter(current), current)
+    np.testing.assert_array_equal(adapter(adapter.to_current_state(current)), current)
+    assert np.linalg.norm(current_tcp_to_training_state(current)[9:12]-current[9:12]) > .17
+    parked = SessionParkedStateAdapter(adapter, operator_confirmed=True)
+    fill_parked_reference(parked, current)
+    result = parked.adapt(current, session_id='trial1', epoch='epoch1', t_mono=1003.6)
+    np.testing.assert_array_equal(result, current)
+    assert parked.report()['state_pose_convention'] == 'corrected_tcp'
+
+
+@pytest.mark.parametrize('shadow_diagnostic', [False, True])
+def test_corrected_tcp_policy_input_in_both_shadow_paths(setup, shadow_diagnostic):
+    corrected_checkpoint(setup)
+    policy = policy_for(setup, shadow_constant_diagnostic=shadow_diagnostic)
+    assert policy.act(observation(setup)) is None  # shadow never publishes
+    np.testing.assert_array_equal(policy.predictor.last_state, setup[2])
+
+
+@pytest.mark.parametrize('field,value', [
+    ('schema_version', 2), ('state_pose_convention', 'flange'),
+    ('legacy_observation_conversion', True), ('gripper', 'delta'),
+    ('action_pose_convention', 'tool_frame')])
+def test_ambiguous_observation_contract_refused(setup, field, value):
+    checkpoint = corrected_checkpoint(setup)
+    path = checkpoint/'apollo_observation_contract.json'
+    contract = json.loads(path.read_text()); contract[field] = value
+    path.write_text(json.dumps(contract))
+    with pytest.raises(ValueError, match='contract'):
+        CheckpointStateAdapter(checkpoint)
+
+
+def test_new_task_without_observation_contract_refused(setup):
+    (setup[0]/'dataset_provenance.json').write_text(json.dumps({'task': 'Lamp Assembling'}))
+    with pytest.raises(ValueError, match='explicit Apollo observation contract'):
+        CheckpointStateAdapter(setup[0])
+
+
+def test_corrected_parked_roundoff_is_projected_without_relaxing_band(setup):
+    from safetensors.numpy import load_file
+    checkpoint = corrected_checkpoint(setup)
+    path = checkpoint/'policy_preprocessor_step_5_normalizer_processor.safetensors'
+    stats = load_file(str(path))
+    stats['observation.state.std'][30] = 1.7e-8
+    stats['observation.state.min'][30] -= 4e-8
+    stats['observation.state.max'][30] += 4e-8
+    save_file(stats, str(path))
+    adapter = CheckpointStateAdapter(checkpoint)
+    assert adapter.mask.sum() == 17 and adapter.tolerance == 1e-3
+    state = setup[2].copy(); state[30] += 3e-8
+    assert adapter.stabilize_training_state(state)[30] == adapter.mean[30]
+    parked = SessionParkedStateAdapter(adapter, operator_confirmed=True)
+    fill_parked_reference(parked, setup[2])
+    # A genuine moved parked input is still refused.
+    moved = setup[2].copy(); moved[17] += .002
+    with pytest.raises(ValueError, match='Parked hardware changed'):
+        parked.adapt(moved, session_id='trial1', epoch='epoch1', t_mono=1003.6)
+
+
+def test_corrected_nonstationary_camera_arm_requires_new_interface(setup):
+    from safetensors.numpy import load_file
+    checkpoint = corrected_checkpoint(setup)
+    path = checkpoint/'policy_preprocessor_step_5_normalizer_processor.safetensors'
+    stats = load_file(str(path)); stats['observation.state.max'][17] += .01
+    save_file(stats, str(path))
+    with pytest.raises(ValueError, match='nonstationary parked features'):
+        CheckpointStateAdapter(checkpoint)
 
 
 def test_parked_reference_requires_operator_and_exact_constant_mask(setup):
@@ -992,6 +1275,393 @@ def test_extended_approach_cannot_use_native_clock(setup,tmp_path):
                    output=tmp_path/'bad_extended')
 
 
+def grasp_stage_policy(setup, tmp_path):
+    p = policy_for(setup, action_rows=8, max_chunks=12, max_seconds=30,
+                   bounded_rollout=True, supervised_grasp=True, action_row_dt_s=.2,
+                   confirm_parked_setup=True, align_to_training_hemisphere=True,
+                   output=tmp_path/'grasp_stage')
+    path = tmp_path/'grasp_grant.json'
+    p.await_bounded_rollout_authorization(path)
+    grant = {'purpose':'SUPERVISED_GRASP_STAGE', 'session_id':'trial1', 'epoch':'epoch1',
+             'policy_id':p.policy_id, 'action_rows':8, 'max_chunks':12,
+             'expires_t_mono':1030, 'chunk_dt_s':.2, 'total_translation_path_m':.25,
+             'prefix_translation_path_m':.04, 'row_translation_m':.006,
+             'total_rotation_path_rad':.15, 'first_gripper_target_change':.1,
+             'row_gripper_target_change':.06, 'prefix_gripper_target_path':.45,
+             'total_gripper_target_path':1.}
+    return p, path, grant
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'bounded_rollout':False}, {'supervised_approach':True}, {'extended_approach':True},
+    {'action_row_dt_s':.04}, {'max_chunks':13}, {'max_seconds':31},
+])
+def test_grasp_stage_requires_distinct_finite_slow_profile(setup, tmp_path, kwargs):
+    defaults = dict(action_rows=8, max_chunks=12, max_seconds=30, bounded_rollout=True,
+                    supervised_grasp=True, action_row_dt_s=.2, confirm_parked_setup=True,
+                    align_to_training_hemisphere=True, output=tmp_path/'bad_grasp')
+    with pytest.raises(ValueError):
+        policy_for(setup, **(defaults | kwargs))
+
+
+@pytest.mark.parametrize('key,value', [
+    ('purpose','SUPERVISED_EXTENDED_APPROACH'), ('session_id','different'),
+    ('epoch','restarted'), ('chunk_dt_s',.04), ('total_translation_path_m',.5),
+    ('total_rotation_path_rad',.3), ('row_translation_m',.01),
+    ('first_gripper_target_change',1.), ('row_gripper_target_change',1.),
+    ('prefix_gripper_target_path',1.), ('total_gripper_target_path',2.),
+    ('expires_t_mono',1040),
+])
+def test_grasp_grant_cannot_expand_or_change_scope(setup, tmp_path, key, value):
+    p, path, grant = grasp_stage_policy(setup, tmp_path)
+    path.write_text(json.dumps(grant | {key:value}))
+    with pytest.raises(ValueError):
+        p.act(observation(setup))
+    assert p.disarmed and p.authorization_consumed and p.returned_chunks == 0
+    path.write_text(json.dumps(grant))
+    assert p.act(observation(setup, oid=2)) is None  # no edited grant can rearm
+
+
+def test_grasp_stage_can_continue_from_partial_opening_with_unmodified_actions(setup, tmp_path):
+    setup[2][7] = .87
+    p, path, grant = grasp_stage_policy(setup, tmp_path)
+    path.write_text(json.dumps(grant)); calibrate_bounded_policy(p, setup)
+    targets = [np.linspace(.84,.49,8), np.linspace(.44,.09,8), np.linspace(.06,0,8)]
+    published = []
+    for i in range(40):
+        setup[3].t = 1003.52+i*.33; p.on_session(session())
+        p.predictor.raw[:,6] = targets[len(published)]
+        out = p.act(observation(setup, oid=12+i))
+        if out is not None:
+            np.testing.assert_array_equal(out.actions, p.predictor.raw[:,:8])
+            published.append(out)
+            setup[2][7] = out.actions[-1,6]
+            if len(published) == 3:
+                break
+    assert len(published) == 3 and not p.disarmed
+    assert p.last_gripper_target == 0
+    assert p.gripper_path_used == pytest.approx(.87)
+    assert p.translation_path_used == pytest.approx(.0048)
+    assert p.rotation_path_used == 0
+    assert p.initial_gripper == pytest.approx(.87)
+    p.reset()
+    assert p.disarmed and not p._may_publish()
+
+
+@pytest.mark.parametrize('kind', ['first_jump', 'row_jump', 'prefix_path', 'pose_row',
+                                 'pose_prefix', 'rotation', 'out_of_range', 'rail'])
+def test_grasp_stage_refuses_oversize_prediction_without_clipping(setup, tmp_path, kind):
+    setup[2][7] = .87
+    p, path, grant = grasp_stage_policy(setup, tmp_path)
+    path.write_text(json.dumps(grant)); calibrate_bounded_policy(p, setup)
+    p.predictor.raw[:,6] = .87
+    if kind == 'first_jump': p.predictor.raw[:,6] = .70
+    if kind == 'row_jump': p.predictor.raw[4:,6] = .78
+    if kind == 'prefix_path': p.predictor.raw[:,6] = np.linspace(.78,.374,8)
+    if kind == 'pose_row': p.predictor.raw[0,0] = .007
+    if kind == 'pose_prefix': p.predictor.raw[:,0] = .0051
+    if kind == 'rotation': p.predictor.raw[:,3] = .02
+    if kind == 'out_of_range': p.predictor.raw[:,6] = 1.01
+    if kind == 'rail': p.predictor.raw[0,7] = .001
+    setup[3].t = 1003.52; p.on_session(session())
+    with pytest.raises(ValueError): p.act(observation(setup, oid=12))
+    assert p.disarmed and p.returned_chunks == 0 and p.gripper_path_used == 0
+    with np.load(p.output/'refused_observation_000012.npz') as saved:
+        np.testing.assert_array_equal(saved['proposed_actions'], p.predictor.raw)
+
+
+def test_grasp_stage_counts_gripper_reversals_across_chunks(setup, tmp_path):
+    setup[2][7] = .87
+    p, path, grant = grasp_stage_policy(setup, tmp_path)
+    path.write_text(json.dumps(grant)); calibrate_bounded_policy(p, setup)
+    targets = [np.linspace(.8,.45,8), np.linspace(.45,.8,8), np.linspace(.8,.45,8)]
+    for i in range(40):
+        setup[3].t = 1003.52+i*.33; p.on_session(session())
+        p.predictor.raw[:,6] = targets[p.returned_chunks]
+        try:
+            out = p.act(observation(setup, oid=12+i))
+        except ValueError as exc:
+            assert 'gripper budget' in str(exc)
+            break
+        if out is not None: setup[2][7] = out.actions[-1,6]
+    else: pytest.fail('Cumulative gripper motion was not refused')
+    assert p.disarmed and p.returned_chunks == 2
+    assert p.gripper_path_used == pytest.approx(.77)
+
+
+def test_grasp_stage_keeps_extended_translation_budget(setup, tmp_path):
+    p, path, grant = grasp_stage_policy(setup, tmp_path)
+    path.write_text(json.dumps(grant)); calibrate_bounded_policy(p, setup)
+    p.predictor.raw[:,0] = .003
+    for i in range(60):
+        setup[3].t = 1003.52+i*.33; p.on_session(session())
+        try: p.act(observation(setup, oid=12+i))
+        except ValueError as exc:
+            assert 'budget' in str(exc)
+            break
+    else: pytest.fail('Grasp stage exceeded its finite pose budget')
+    assert p.returned_chunks == 10 and p.translation_path_used == pytest.approx(.24)
+    assert p.disarmed
+
+
+def drawer_task_policy(setup, tmp_path, row_dt=.2, slew=False):
+    from apollo_task_guard import DRAWER_TASK_LIMITS
+    setup[2][9:12] = [.65, 0., .05]
+    seconds = 550 if row_dt == .4 else 300
+    p = policy_for(setup, action_rows=8, max_chunks=150, max_seconds=seconds,
+                   bounded_rollout=True, supervised_drawer_task=True, action_row_dt_s=row_dt,
+                   gripper_reference_slew=slew,
+                   confirm_parked_setup=True, align_to_training_hemisphere=True,
+                   output=tmp_path/'drawer_task')
+    path = tmp_path/'drawer_task_grant.json'; p.await_bounded_rollout_authorization(path)
+    grant = {'purpose':'SUPERVISED_DRAWER_TASK_SLEW' if slew else 'SUPERVISED_DRAWER_TASK', 'session_id':'trial1', 'epoch':'epoch1',
+             'policy_id':p.policy_id, 'action_rows':8, 'max_chunks':150,
+             'expires_t_mono':1000+seconds, 'chunk_dt_s':row_dt, **DRAWER_TASK_LIMITS}
+    if slew: grant.update(gripper_reference_slew=True, gripper_reference_max_step=.06)
+    return p, path, grant
+
+
+def test_slew_changes_only_gripper_and_saves_raw_prediction(setup, tmp_path):
+    p, path, grant = drawer_task_policy(setup,tmp_path,row_dt=.4,slew=True)
+    path.write_text(json.dumps(grant)); calibrate_bounded_policy(p,setup)
+    p.predictor.raw[:,6] = 0  # Abrupt raw closure becomes a .06-per-row reference.
+    setup[3].t=1003.52; p.on_session(session())
+    result=p.act(observation(setup,oid=12))
+    np.testing.assert_array_equal(result.actions[:,:6],p.predictor.raw[:,:6])
+    np.testing.assert_array_equal(result.actions[:,7],p.predictor.raw[:,7])
+    np.testing.assert_allclose(result.actions[:,6],1-.06*np.arange(1,9),atol=1e-7)
+    row=json.loads((p.output/'predictions.jsonl').read_text().splitlines()[-1])
+    assert row['gripper_reference_slew']
+    assert np.all(np.array(row['raw_actions_grip'])[:,6]==0)
+    np.testing.assert_array_equal(row['actions_grip'],result.actions)
+    assert p.gripper_path_used == pytest.approx(.48)
+    setup[3].t += .33; p.on_session(session())
+    assert p.act(observation(setup,oid=13)) is None
+    assert p.task_guard.gripper_response_since is None  # row 0, not future close.
+
+
+@pytest.mark.parametrize('key,value', [
+    ('purpose','SUPERVISED_DRAWER_TASK'), ('gripper_reference_slew',False),
+    ('gripper_reference_max_step',.07), ('chunk_dt_s',.2), ('expires_t_mono',1551),
+])
+def test_slow_slew_grant_is_separate_and_cannot_expand(setup,tmp_path,key,value):
+    p,path,grant=drawer_task_policy(setup,tmp_path,row_dt=.4,slew=True)
+    path.write_text(json.dumps(grant | {key:value}))
+    with pytest.raises(ValueError): p.act(observation(setup))
+    assert p.disarmed and p.returned_chunks==0
+
+
+@pytest.mark.parametrize('targets,previous', [([np.nan],.5),([1.1],.5),([0],-1),([],1)])
+def test_slew_does_not_hide_invalid_predictions(targets,previous):
+    from apollo_gripper_reference import slew_gripper_targets
+    with pytest.raises(ValueError): slew_gripper_targets(targets,previous)
+
+
+def test_slew_refusal022_regression_and_float32_step():
+    from apollo_gripper_reference import slew_gripper_targets
+    from apollo_task_guard import DrawerTaskGuard
+    raw=np.array([70.6192856,65.1472931,62.3614349,61.4895020,
+                  61.7592812,62.4531937,63.2574692,64.0392914])/84
+    previous=67.520520687/84
+    with pytest.raises(ValueError): DrawerTaskGuard.gripper_path(raw,66/84,previous,1.1724106)
+    sent=slew_gripper_targets(raw,previous).astype(np.float32)
+    assert max(abs(np.diff(np.r_[previous,sent]))) <= .0600001
+    DrawerTaskGuard.gripper_path(sent,66/84,previous,1.1724106)
+    # The larger spike remains refused without the explicit filter.
+    with pytest.raises(ValueError): DrawerTaskGuard.gripper_path([.9,.835],.9,.9,0)
+
+
+def test_reference_watchdog_uses_active_not_future_row_and_still_stops():
+    from apollo_gripper_reference import PublishedGripperReference
+    from apollo_task_guard import DrawerTaskGuard
+    ref=PublishedGripperReference();ref.record([1,1,1,1,1,1,1,.3],10,.4)
+    assert ref.at(9.9) is None
+    assert ref.at(12.7)==1 and ref.at(12.9)==.3
+    state=np.zeros(32);state[9:12]=[.65,0,.05];state[12]=1;state[7]=.8
+    guard=DrawerTaskGuard()
+    for t in (10.1,11.1,12.1,12.9,13.5,15.8): guard.observe(state,t,0,ref.at(t))
+    with pytest.raises(ValueError,match='wide gripper'):
+        guard.observe(state,15.91,0,ref.at(15.91))
+    ref.record([.7,.8],16,.4)
+    assert ref.at(15.99)==.3 and ref.at(16.01)==.7 and ref.at(20)==.8
+
+
+def test_lamp_gripper_watchdog_treats_close_stall_as_contact_but_checks_opening_progress():
+    from apollo_task_guard import LampTaskGuard
+    state=np.zeros(32); state[9:12]=[.63,0,.1]; state[12]=1
+    guard=LampTaskGuard()
+    for t in (0,6,12):
+        state[7]=.75; guard.observe(state,t,0,.1)
+    guard=LampTaskGuard()
+    for t,opening in [(0,.2),(4,.25),(8,.30),(12,.35)]:
+        state[7]=opening; guard.observe(state,t,0,.9)
+    state[7]=.35; guard.observe(state,16.9,0,.9)
+    with pytest.raises(ValueError,match='opening'):
+        guard.observe(state,17.01,0,.9)
+
+
+def test_slow_slew_retains_workspace_guard(setup,tmp_path):
+    p,path,grant=drawer_task_policy(setup,tmp_path,row_dt=.4,slew=True)
+    path.write_text(json.dumps(grant));calibrate_bounded_policy(p,setup)
+    setup[3].t=1003.52;setup[2][11]=-.11;p.on_session(session())
+    with pytest.raises(ValueError,match='workspace'):p.act(observation(setup,oid=12))
+    assert p.disarmed and p.returned_chunks==0
+
+
+def test_slow_slew_full_finite_horizon_and_chunk_boundary(setup,tmp_path):
+    p,path,grant=drawer_task_policy(setup,tmp_path,row_dt=.4,slew=True)
+    path.write_text(json.dumps(grant));calibrate_bounded_policy(p,setup)
+    last_time=None
+    for i in range(1660):
+        setup[3].t=1003.52+i*.33;p.on_session(session())
+        result=p.act(observation(setup,oid=12+i))
+        if result is not None:
+            np.testing.assert_array_equal(result.actions,p.predictor.raw[:,:8])
+            if last_time is not None: assert setup[3].t-last_time >= 3.2
+            last_time=setup[3].t
+        if p.returned_chunks==150: break
+    assert p.returned_chunks==150 and not p.disarmed
+    setup[3].t+=.33;p.on_session(session())
+    assert p.act(observation(setup,oid=13+i)) is None
+    assert p.deadline==1550
+
+
+def test_slew_keeps_random_references_bounded_across_chunks():
+    from apollo_gripper_reference import slew_gripper_targets
+    rng=np.random.default_rng(20260913)
+    previous=.96
+    for _ in range(100):
+        sent=slew_gripper_targets(rng.random(8),previous).astype(np.float32)
+        assert np.max(abs(np.diff(np.r_[previous,sent]))) <= .0600001
+        assert np.all((sent>=0)&(sent<=1))
+        previous=float(sent[-1])
+
+
+@pytest.mark.parametrize('kwargs', [
+    {'bounded_rollout':False}, {'supervised_grasp':True}, {'supervised_approach':True},
+    {'extended_approach':True}, {'action_row_dt_s':.04}, {'action_rows':1},
+    {'max_chunks':151}, {'max_seconds':301}, {'execute':True},
+])
+def test_drawer_task_cannot_use_unreviewed_profile(setup, tmp_path, kwargs):
+    defaults = dict(action_rows=8, max_chunks=150, max_seconds=300, bounded_rollout=True,
+                    supervised_drawer_task=True, action_row_dt_s=.2, confirm_parked_setup=True,
+                    align_to_training_hemisphere=True, output=tmp_path/'bad_task')
+    with pytest.raises(ValueError): policy_for(setup, **(defaults | kwargs))
+
+
+@pytest.mark.parametrize('key,value', [
+    ('purpose','SUPERVISED_GRASP_STAGE'), ('session_id','not-ours'), ('epoch','new-runtime'),
+    ('tcp_min_m',[.5,-.2,-.2]), ('row_translation_m',.01), ('total_translation_path_m',3.),
+    ('total_rotation_path_rad',3.), ('orientation_excursion_rad',1.),
+    ('gripper_response_timeout_s',30.), ('boundary_gripper_target_change',1.),
+    ('total_gripper_target_path',10.), ('motion_stall_window_s',30.), ('expires_t_mono',1301),
+])
+def test_drawer_task_grant_cannot_expand_limits(setup, tmp_path, key, value):
+    p, path, grant = drawer_task_policy(setup, tmp_path)
+    path.write_text(json.dumps(grant | {key:value}))
+    with pytest.raises(ValueError): p.act(observation(setup))
+    assert p.disarmed and p.returned_chunks == 0
+    path.write_text(json.dumps(grant))
+    assert p.act(observation(setup, oid=2)) is None
+
+
+def test_drawer_task_supports_full_finite_horizon_without_rearming(setup, tmp_path):
+    p, path, grant = drawer_task_policy(setup, tmp_path)
+    path.write_text(json.dumps(grant)); calibrate_bounded_policy(p, setup)
+    p.predictor.raw[:,3] = .0005
+    for i in range(900):
+        setup[3].t = 1003.52+i*.33; p.on_session(session())
+        result = p.act(observation(setup, oid=12+i))
+        if result is not None:
+            np.testing.assert_array_equal(result.actions, p.predictor.raw[:,:8])
+        if p.returned_chunks == 150:
+            break
+    else: pytest.fail('Finite task horizon never completed')
+    assert p.returned_chunks == 150 and p.rotation_path_used == pytest.approx(.6)
+    setup[3].t += .33; p.on_session(session())
+    assert p.act(observation(setup, oid=13+i)) is None
+    p.reset(); assert p.disarmed
+
+
+@pytest.mark.parametrize('counter,value', [('translation_path_used',1.999),('rotation_path_used',1.499)])
+def test_drawer_task_keeps_cumulative_motion_limits(setup, tmp_path, counter, value):
+    p, path, grant = drawer_task_policy(setup, tmp_path)
+    path.write_text(json.dumps(grant)); calibrate_bounded_policy(p, setup)
+    p.predictor.raw[:,3] = .0005
+    setattr(p, counter, value)
+    setup[3].t=1003.52; p.on_session(session())
+    with pytest.raises(ValueError, match='budget'): p.act(observation(setup, oid=12))
+    assert p.returned_chunks == 0 and p.disarmed
+
+
+def test_drawer_task_refuses_workspace_excursion_even_if_net_delta_cancels(setup, tmp_path):
+    p, path, grant = drawer_task_policy(setup, tmp_path)
+    setup[2][9] = .769
+    path.write_text(json.dumps(grant)); calibrate_bounded_policy(p, setup)
+    p.predictor.raw[:,:3] = 0
+    p.predictor.raw[0,0] = .003; p.predictor.raw[1,0] = -.003
+    setup[3].t=1003.52; p.on_session(session())
+    with pytest.raises(ValueError, match='workspace'): p.act(observation(setup, oid=12))
+    assert p.returned_chunks == 0 and p.disarmed
+
+
+def test_drawer_task_watchdog_runs_between_slow_predictions(setup, tmp_path):
+    p, path, grant = drawer_task_policy(setup, tmp_path)
+    path.write_text(json.dumps(grant)); calibrate_bounded_policy(p, setup)
+    setup[3].t=1003.52; p.on_session(session())
+    assert p.act(observation(setup, oid=12)) is not None
+    setup[3].t += .33; p.on_session(session()); setup[2][11] = -.11
+    with pytest.raises(ValueError, match='workspace'): p.act(observation(setup, oid=13))
+    assert p.returned_chunks == 1 and p.disarmed
+
+
+def test_drawer_task_deadline_does_not_renew_on_hold(setup, tmp_path):
+    p, path, grant = drawer_task_policy(setup, tmp_path)
+    path.write_text(json.dumps(grant)); calibrate_bounded_policy(p, setup)
+    setup[3].t=1300.01; p.on_session(session())
+    assert p.act(observation(setup, oid=12)) is None
+    assert p.returned_chunks == 0 and p.deadline == 1300
+
+
+def test_task_gripper_allows_normal_knob_contact_but_not_wide_nonresponse():
+    from apollo_task_guard import DrawerTaskGuard
+    state = np.zeros(32); state[9:12] = [.65,0,.05]; state[12] = 1; state[7] = .2
+    guard = DrawerTaskGuard()
+    for t in np.arange(0,5,.33): guard.observe(state,t,0.,0.)
+    assert guard.gripper_response_since is None  # not forced to reach zero through an object
+    assert guard.gripper_path(np.zeros(8),.2,.05,.8) == pytest.approx(.05)
+    state[7] = .8
+    guard.observe(state,6.,0.,.3)
+    with pytest.raises(ValueError,match='wide gripper'): guard.observe(state,9.01,0.,.3)
+
+
+def test_task_gripper_response_watch_resets_after_actual_response():
+    from apollo_task_guard import DrawerTaskGuard
+    state = np.zeros(32); state[9:12] = [.65,0,.05]; state[12] = 1; state[7] = .8
+    guard = DrawerTaskGuard(); guard.observe(state,0.,0.,.3)
+    state[7] = .5; guard.observe(state,2.,0.,.3)
+    assert guard.gripper_response_since is None
+    state[7] = .8; guard.observe(state,4.,0.,.3); guard.observe(state,6.,0.,.3)
+    with pytest.raises(ValueError,match='wide gripper'): guard.observe(state,7.01,0.,.3)
+
+
+def test_task_guard_rejects_stationary_arm_despite_continued_requests():
+    from apollo_task_guard import DrawerTaskGuard
+    state = np.zeros(32); state[9:12] = [.65,0,.05]; state[12] = 1; state[7] = .8
+    guard = DrawerTaskGuard()
+    for i in range(10): guard.observe(state,i*.5,i*.005,None)
+    with pytest.raises(ValueError,match='without measured progress'):
+        guard.observe(state,5.01,.051,None)
+
+
+def test_task_guard_orientation_limit_is_relative_to_first_observation():
+    from apollo_task_guard import DrawerTaskGuard
+    state = np.zeros(32); state[9:12] = [.65,0,.05]; state[12] = 1; state[7] = .8
+    guard = DrawerTaskGuard(); guard.observe(state,0.,0.,None)
+    q = Rotation.from_rotvec([0,.31,0]).as_quat(); state[12:16] = q[[3,0,1,2]]
+    with pytest.raises(ValueError,match='orientation excursion'): guard.observe(state,1.,0.,None)
+
+
 def test_gripper_probe_has_zero_pose_and_rail_deltas_and_distinct_identity(setup,tmp_path):
     from run_apollo_gripper_check import make_policy
     path=tmp_path/'probe_grant.json'
@@ -1027,6 +1697,28 @@ def test_gripper_hold_never_accumulates_closure():
         np.testing.assert_allclose(out[:,6],.896190476,atol=1e-7)
         np.testing.assert_array_equal(out[:,:6],np.zeros((8,6)))
         assert np.all(out[:,7:14]==0) and np.all(out[:,15]==0)
+
+
+def test_gripper_reopening_is_small_fixed_target_with_zero_pose():
+    from run_apollo_gripper_check import GripperCheckPredictor
+    predictor=GripperCheckPredictor('open')
+    for measured in (.88,.92,.96):
+        state=np.zeros(32);state[7]=measured
+        out=predictor.predict_chunk(state,None,None)
+        np.testing.assert_allclose(out[:,6],.96,atol=1e-7)
+        np.testing.assert_array_equal(out[:,:6],np.zeros((8,6)))
+    for invalid in (.7,.99,float('nan')):
+        predictor.reset();state[7]=invalid
+        with pytest.raises(ValueError):predictor.predict_chunk(state,None,None)
+
+
+def test_gripper_reopening_has_distinct_identity_and_authorization(setup,tmp_path):
+    from run_apollo_gripper_check import make_policy
+    p=make_policy(setup[0],tmp_path/'gripper_open',tmp_path/'open_grant',setup[3],
+                  repeat_hold=True,direction='open')
+    assert p.policy_id=='apollo_gripper_open_check_20260912'
+    assert p.authorization_purpose=='SUPERVISED_GRIPPER_OPEN_HOLD_CHECK'
+    assert p.max_chunks==3 and p.chunk_len==8 and p.chunk_dt_s==.04
 
 
 def test_gripper_hold_is_fixed_target_three_chunks_and_one_fresh_grant(setup,tmp_path):

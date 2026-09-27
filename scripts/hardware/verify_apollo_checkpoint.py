@@ -14,6 +14,7 @@ import pyarrow.parquet as pq
 import torch
 
 from apollo_predictor import ApolloPredictor
+from apollo_legacy_state import CheckpointStateAdapter
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
 
@@ -28,6 +29,7 @@ def main():
     if args.output.exists():
         raise FileExistsError(f"Refusing to replace {args.output}")
     predictor = ApolloPredictor(args.checkpoint)
+    state_adapter = CheckpointStateAdapter(args.checkpoint)
     meta = json.loads((args.dataset / "export_manifest.json").read_text())
     native = json.loads((args.dataset / "apollo_manifest.json").read_text())
     if native["fps"] != 25:
@@ -44,7 +46,7 @@ def main():
         indices = np.linspace(0, episode["length"] - 25, args.frames_per_episode).round().astype(int)
         for frame in indices:
             item = ds[episode["dataset_from_index"] + int(frame)]
-            state = item["observation.state"].numpy()
+            state = state_adapter.stabilize_training_state(item["observation.state"].numpy())
             view = item["observation.images.view_wrist"].permute(1, 2, 0).numpy()
             grip = item["observation.images.grip_wrist"].permute(1, 2, 0).numpy()
             if image_contract is None:
@@ -89,6 +91,8 @@ def main():
     report = {"checkpoint": str(args.checkpoint.resolve()), "task": meta["task"],
               "validation_episodes": len(episodes)-meta["train_episodes"], "observations": len(rows),
               "seed": 20260912, "prefix_actions": 8, "nominal_hz": 25,
+              "state_pose_convention": state_adapter.pose_convention,
+              "parked_features_projected_to_checkpoint_reference": np.flatnonzero(state_adapter.mask).tolist(),
               "image_contract": image_contract, "load_predict": "PASS",
               "policy": metrics(pred), "zero_motion_hold_gripper_reference": metrics(hold),
               "prediction_abs_max_active_channels": np.max(np.abs(pred[..., :7]), axis=(0,1)).tolist(),

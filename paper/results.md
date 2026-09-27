@@ -905,7 +905,10 @@ the recordings use older SDK-flange observation features whereas live Dora now
 publishes corrected TCP features. An observation-only adapter preserves the
 trained interface; native action targets are unchanged. Its comparison spans
 103,346 recorded frames, and all four stabilized fixture round trips preserve
-lab-GPU predictions exactly. The isolated adapter/transport suite passes 128 tests.
+lab-GPU predictions exactly. The isolated adapter/transport suite now passes 217
+tests, including the continuous-task envelope, slow-clock/reference checks and
+post-contact launcher hold described below. These are software tests, not
+physical clearance validation.
 
 The drawer spline produced five finite action prefixes from live real-camera and
 robot-state streams (202–236 ms per prediction; median 211 ms). A separate 20 s
@@ -937,6 +940,13 @@ This correction was subsequently used in learned hardware movements.
 | Three-step closed-loop test (trial 010) | Three two-row prefixes; requested translation path 4.738 mm, measured net TCP displacement 2.146 mm; gripper 0.96429→0.97619 | No reported fault in 171 running telemetry frames; view arm and rails unchanged; synchronized camera frames inspected |
 | Short slow-clock approach (trial 012) | Three eight-row chunks at 200 ms/row; requested net xyz [−1.313, −42.524, −7.531] mm; measured [−0.657, −37.926, −7.006] mm | 24 rows executed, no reported fault; view arm/rails unchanged |
 | Sustained slow-clock approach (trial 013) | Six eight-row chunks; requested path 148.388 mm; measured net descent 126.215 mm toward the drawer | 48 rows executed, no reported fault; automatic stop when requested gripper closure exceeded approach allowance |
+| Learned approach after operator reset (trial 018) | Eight eight-row chunks; requested net xyz [−1.335, −26.361, −125.709] mm, measured [−1.759, −25.746, −121.200] mm; gripper 80→73 mm | 64 rows executed, no reported fault in 421 running frames; view arm/rails unchanged; ninth prefix refused by approach-only gripper allowance; no grasp established |
+| Bounded grasp-stage continuation (trial 019) | Seven eight-row chunks; requested net xyz [17.387, −7.745, −67.889] mm, measured [16.371, −7.687, −66.301] mm | 56 rows executed, no reported fault in 380 running frames; view arm/rails unchanged; eighth prefix refused at cumulative 0.15 rad rotation allowance; no grasp established |
+| Short alignment segment (trial 020) | One eight-row chunk; requested net xyz [13.230, 1.165, −0.873] mm, measured [12.289, 1.092, −0.571] mm | Eight rows executed, no reported fault in 172 running frames; view arm/rails unchanged; gripper remained 67 mm despite final target 60.471 mm; no grasp established |
+| Continuous-task attempt (trial 021) | Seven eight-row chunks; requested net xyz [24.668, 5.254, −34.748] mm, measured [22.411, 4.362, −33.144] mm | 56 rows executed, no reported fault in 388 running frames; view arm/rails unchanged during execution; gripper 67→68 mm; eighth prefix refused at workspace floor; no grasp established |
+| Continuous attempt after collection-pose reset (trial 022) | 22 eight-row chunks; requested net xyz [27.525, −54.103, −313.993] mm, measured [16.372, −43.981, −236.456] mm | 176 rows executed, no reported fault in 991 running frames; view arm/rails unchanged during execution; gripper responds in both directions, endpoints 81→67 mm; next prefix refused at per-row gripper-step limit; no grasp established |
+| 400 ms/row approach (trial 024) | 16 eight-row chunks; requested net descent 237.920 mm, measured 233.417 mm; gripper 81→72 mm | Manually interrupted near the table; no grasp; no reported fault in 1,544 running frames; view arm/rails unchanged |
+| 400 ms/row repeat after reset (trial 025) | 19 eight-row chunks; requested net descent 262.181 mm, measured 257.269 mm; gripper 81→73 mm | **Operator-reported table contact; no grasp.** Next prefix refused at workspace floor. Zero reported fault frames in 1,805 samples did not establish physical clearance. |
 
 An earlier single-row test exposed a client wire-rate mismatch: the external
 source's delta scaling combined with its row-consumption budget amplified intended
@@ -957,7 +967,7 @@ parked state at the original callback rate. Pure-source replay verifies unchange
 integrated delta bookkeeping. This enabled a sustained approach without changing
 the driver or its limits. Native and slow commissioning trials used different
 starting observations and predictions; they are not a matched timing ablation.
-Gripper response also needs validation: the latest readout remained at 0.976
+Before the operator's reset, trial 013's gripper readout remained at 0.976
 despite targets down to 0.884 during that approach. A grasp has not been established.
 In a separate deterministic diagnostic (trial 014, not a learned policy), one
 gripper target reduced requested opening by 6.72 mm while all pose/rail increments
@@ -970,11 +980,301 @@ the gripper response path, rather than establishing an insertion-policy failure.
 
 **No grasp, insertion, or full hardware task completion has been demonstrated.**
 These tests establish live inference and bounded learned motion, not hardware
-success rates. The operator confirmed clearance from the knobs; reliable gripper
-response remains required before continuing toward contact. Shared-runtime setup
+success rates. After the operator reset the arm and returned it, two further
+deterministic checks through the same Dora interface verified closing and opening:
+81→74 mm toward a 74.28 mm target (trial 016), then 74→80 mm toward an 80.72 mm
+target (trial 017). There was no measured arm/rail motion during either response
+window and no reported arm fault. This allowed bounded policy testing to resume,
+but did not establish a permanent repair. Trial 018 then established simultaneous learned
+arm and gripper response, as reported in the table, but not a grasp or insertion
+success. The subsequent grasp-stage trial 019 made a further measured 66.301 mm
+descent and 16.371 mm positive-x movement, stopping at its rotation allowance.
+The gripper initially closed from 73 to 67 mm but then did not follow later
+targets down to 59.668 mm in the available readout; contact versus command/polling
+behavior remains unresolved. The one-chunk alignment test 020 confirmed another
+12.289 mm of positive-x motion but again no change from the 67 mm gripper readout,
+despite smaller requested openings. The operator clarified that the intervention
+was a reset and return, not a hardware/software repair. These are commissioning
+measurements, not completed task evaluations. Shared-runtime setup
 warnings and diagnostic limitations are recorded in the integration document.
+
+Trial 021 used a separate continuous-task profile (at most 150 chunks/300 s,
+2 m translation path, 1.5 rad rotation path), with intermediate-pose workspace
+checks and measured-response monitoring at the unchanged low hardware speed.
+It stopped at the workspace floor rather than a short commissioning budget.
+The unpublished next prefix requested 9.022 mm further descent. Inspection of
+the archived poses and camera views found a collection-setup mismatch: the fixed
+view arm TCP is 33.893 mm lower with a 4.424-degree orientation difference from
+the recorded pose. Its height fell by about 5.5 mm between successive sessions
+016–021, despite no measured motion during their action windows. A stationary
+session-local calibration therefore does not establish agreement with the
+training camera view. This is a deployment diagnosis, not evidence of a learned
+representation advantage or a proven sole cause of failure. Restore and verify
+the collection setup before a fresh continuous attempt; no workspace limit was
+relaxed and no production runtime/driver was modified. Raw evidence is retained
+in `drawer_trial_021_pose_support.json` and `drawer_pose_reference_031/` under the
+hardware-inference output directory.
+
+Following a full collection-pose reset, trial 022 reduced the view-arm mismatch
+to 5.241 mm in height and 0.679 degrees after startup. It ran 22 chunks without
+an intermediate restart, with sustained gripper response, but did not establish
+a grasp. A 5.472 mm adjacent gripper-target change exceeded the 5.040 mm per-row
+limit. The operator reported the fingers close to the tabletop; the session was
+closed and no guard was relaxed. Offline comparison of both heads on the stopped
+input still predicts descent (spline 3.15–5.12 mm; waypoint 8.23–16.17 mm across
+three inference-noise seeds), so switching heads is not itself an alignment fix.
+These remain commissioning diagnostics, not scored autonomous hardware results.
+
+Further read-only diagnosis records 1,922 joint-step cap events across 3,958
+controller ticks in trial 022, consistent with substantial under-tracking.
+A 400 ms command clock passes pure-source delta-bookkeeping checks. Its opt-in
+client implementation adds gripper reference slew (0.06 normalized change per
+row) and active-row response monitoring; raw and transmitted commands are logged
+separately. The implementation passes 206 isolated tests. Trial 023 interrupted
+during controller startup, before any learned action, with a mode/state warning;
+three Studio instances still had connections to the manipulation controller.
+The session was closed without return-home. After Studio exited, trials 024–025
+executed the revised profile and tracked net descent more closely than trial 022,
+but did not establish a grasp. Different trajectories and intervention points
+preclude a matched hardware timing claim. A separate teacher-forced first-grasp audit
+uses six fixed offsets in five held-out and five training episodes, three
+inference-noise seeds and both frozen heads. Held-out gripper MAE is high at the
+first half-opening target (spline 25.05 mm, waypoint 27.89 mm), falling to
+4.14/4.24 mm eight frames later. This identifies a transition-timing weakness
+that suite-wide offline averages obscure; it is not a physical success result.
+Exact methodology and the complete phase table are in the hardware-inference
+document; raw evidence is in `first_grasp_diagnostic_035/`.
+
+**Post-contact diagnosis and current hold (September 13).** Trial 025's last
+recorded TCP has base-frame z = −94.046 mm; the unpublished next prefix requests
+8.011 mm further descent. The −100 mm workspace floor is not a fingertip/table
+clearance limit and did not prevent the reported contact. An offline reconstruction
+of the selected `mavis_v2` scene places the final tool projection **215.777 mm
+outside the modeled table footprint**. The table ends at world y = 0.310 m,
+while the tool is at y = 0.525777 m. Transforming recorded TCP positions and
+replaying recorded joint kinematics agree within 0.001263 mm across 1,805 samples;
+this validates the computation, not the physical scene calibration. The task
+work surface is not covered by that table box. No production scene or runtime
+was edited. Our launchers now refuse motion and controller-enabled shadow
+session creation pending on-site inspection and verified work-surface/gripper
+clearance. The operator has reset the arm; their teleoperation session is
+untouched. See `drawer_table_coverage_046.json`, `adapter_tests_v28.xml`, and
+`docs/HARDWARE_INFERENCE_2026-09-12.md`. No hardware task-success claim is made.
+
 The tight H200/4090 fixture comparison
 still flags both drawer models; the largest translation-component difference is
 0.0109 mm per row for spline and 0.4808 mm for waypoint. Full details, retained
 comparison reports, and the supervised commissioning plan are in
 `docs/HARDWARE_INFERENCE_2026-09-12.md`.
+
+### 10.2 Lamp assembly training and replay controls (September 13)
+
+The third hardware task places a hollow tapered shade over a printed lamp post.
+The demonstrated sequence is rim grasp, lift, transfer, lower over the post,
+release and withdraw; it does not require a 180-degree object flip. All 52
+recordings were numerically checked and both camera streams fully decoded.
+Thirteen contact sheets cover six sampled times in each episode; no visual
+exclusion was identified. These are demonstration checks, not learned success.
+
+| Data / method | Verified specification |
+|---|---|
+| Episodes / retained frames | 52 / 23,401 |
+| Frozen split | 47 training episodes (21,183 frames); 5 held-out (2,218 frames) |
+| Inputs | Two 640x480 RGB streams; 32-field corrected TCP state; `Lamp Assembling` caption |
+| Commands | 25 Hz dense timeline; 16 native delta/absolute-gripper channels; only manipulation arm active |
+| Matched models | SmolVLA event spline and waypoint; same pretrained initialization, seed 1000, batch 32 |
+| Completed training | 40k updates per head; all 10k/20k/30k/40k checkpoints evaluated; fixed rule selects 10k for both heads |
+| Initialization | All 500 pretrained tensors matched exactly for both heads |
+| Export / spline targets | Lossless numeric roundtrip; spline geometry and parked-output checks passed |
+| Transition validation | 120 observations: closure/release, six fixed offsets, five held-out + five training episodes; three inference-noise seeds |
+
+Unlike the earlier unbackfilled drawer/cabinet recordings, all lamp observations
+use corrected TCP features. Five recordings were backfilled; the remainder were
+recorded natively. The lamp checkpoint carries an explicit observation contract
+and must not pass through the old live-to-flange conversion. One physically
+parked view-quaternion component varies only at numerical precision
+(std 1.676e-8). After verifying near-constant training ranges, inference projects
+the 17 parked fields to checkpoint reference means while still monitoring the
+actual parked hardware. Active-arm pose/gripper inputs and all action labels
+remain unchanged. This transformation is shared by final offline validation,
+transition checks and portable fixtures; it is not a change to the live motion
+limits. The local input/transport/replay/selection suite passes 239 tests.
+
+| Recorded-trajectory check | Result across 52 episodes |
+|---|---:|
+| Delta vs consecutive absolute target translation residual, maximum | 0.000061 mm |
+| Spatial rotation composition residual, maximum | 1.44e-8 rad |
+| Commanded vs next retained measured TCP position discrepancy, maximum | 5.79 mm |
+| Longest original wall-clock gap omitted from dense time | 3.761 s |
+| Physical demonstration replay through our client | Finite prefixes tested in delta and absolute EE; full replay not run |
+| Learned lamp success | Short approaches only; no grasp or assembly success demonstrated |
+
+The five backfilled absolute tracks are derived from deltas, so their agreement
+is not independent execution evidence. The frozen replay packet uses the first
+non-backfilled training episode, `20260911T204950.391Z-538dc8`: 521 rows
+(20.84 s dense time; 35.133 s original wall-clock span), closure at frame 202
+and release at 455.
+It preserves observations, both command representations, both timelines and
+source hashes. Physical replay must distinguish original versus dense timing;
+passing a replay at one clock does not validate every other clock or live model
+preprocessing. The existing post-contact inspection requirement still applies.
+
+At the September 13, 19:53 EDT harvest, training jobs 2466234/2466235,
+transition evaluation 2466263 and selection/packaging 2466270 all completed
+with exit code 0:0. Both selected checkpoints are at 10k updates, chosen
+separately by a rule fixed before evaluation. The score is the mean of gripper
+MAE divided by the hold-gripper MAE and cumulative xyz component RMSE divided
+by the zero-motion reference RMSE. It uses only the five held-out episodes;
+all eight candidate results are retained, with no physical trial-based selection.
+
+| Head | Updates | Transition score, lower is better | Gripper MAE (mm) | Eight-step xyz component RMSE (mm) |
+|---|---:|---:|---:|---:|
+| Spline | **10k, selected** | **0.59375** | 19.35 | 3.250 |
+| Spline | 20k | 0.62709 | 21.21 | 3.280 |
+| Spline | 30k | 0.62851 | 22.31 | 3.079 |
+| Spline | 40k | 0.64589 | 22.93 | 3.165 |
+| Waypoint | **10k, selected** | **0.47960** | 20.64 | 1.638 |
+| Waypoint | 20k | 0.50060 | 20.68 | 1.879 |
+| Waypoint | 30k | 0.54761 | 21.57 | 2.264 |
+| Waypoint | 40k | 0.55195 | 21.93 | 2.245 |
+
+References: hold-gripper MAE 30.17283 mm; zero-motion xyz RMSE 5.95086 mm.
+There are 60 held-out observations (two boundaries, six offsets, five episodes)
+with three matched inference-noise seeds each. These are not independent
+training seeds or physical rollouts. The xyz metric takes one root over all
+selected squared errors; it differs from the mean of per-observation RMSEs in
+the drawer diagnostic below. More updates did not improve the fixed combined
+score. The selected spline has lower gripper error, while the selected waypoint
+has lower translation error on these transition observations.
+
+The selected checkpoints also pass strict reload and broad prediction checks
+on 50 predetermined frames spread across five held-out episodes:
+
+| Selected head | Per-step xyz component RMSE (mm) | Eight-step cumulative xyz component RMSE (mm) | Gripper MAE, opening fraction |
+|---|---:|---:|---:|
+| Spline, 10k | 1.067 | 6.949 | 0.07988 |
+| Waypoint, 10k | 1.128 | 7.124 | 0.08992 |
+
+This broader frame set is distinct from the transition selection set; these
+are offline command errors, not measured robot tracking or full-task success.
+The bundle contains both selected checkpoints, contracts, source, prediction
+fixtures and hashes, with status `OFFLINE_VERIFIED` and no incomplete entries.
+
+The selected bundle was transferred to the lab RTX 4090 and checked without
+connecting to Dora or a robot. Both models load strictly, and the observation
+adapter reproduces fixture inputs/predictions exactly. The original tight
+cross-GPU comparison flags both for numerical review: maximum per-axis
+translation differences are 0.00940/0.00945 mm per row (spline/waypoint),
+rotation-component differences 4.154e-5/3.140e-5 rad, and gripper-fraction
+differences 0.0005928/0.0006859. Do not relabel this test as all-pass; no
+tolerance was changed. Median prediction latency on the saved fixture is
+222.8/187.6 ms after excluding the first call, not a measured closed-loop
+control rate. Raw results: `outputs/hardware_lamp_20260913/lab_portability_20260913/`.
+
+Read-only live-input checks at approximately 20:08 EDT passed for both selected
+lamp models (three predictions each). Both cameras were fresh; measured gripper
+opening was 81 mm and reached the model unchanged. These probes used the
+existing observer with no action outputs, created no sessions, and executed no
+robot commands. The saved initial spline proposal is predominantly lateral and
+agrees in direction with the selected demonstration's first command chunk;
+this does not establish grasping or full-task success. Raw live snapshots and
+reports: `outputs/hardware_lamp_20260913/lamp_live_observer_001/` and
+`lamp_live_waypoint_observer_002/` under the same parent.
+
+Supervised lamp commissioning at 20:31 EDT executed 24 spline action rows
+(three chunks at 200 ms/row). Requested net TCP displacement was
+[-3.209, -0.468, +3.245] mm; measured displacement was
+[-2.479, -0.489, +3.341] mm. The measured gripper opening changed from
+81 to 78 mm; the camera arm and both rails did not move during learned
+execution. This finite approach did not attempt a grasp and is not counted as
+task success. A saved-input diagnostic found strong sensitivity to the pose
+change accumulated over controller restarts. Subsequent trials restored the
+recorded start after startup through the existing planned reset API.
+Raw measurements and two-camera frames:
+`outputs/hardware_lamp_20260913/lamp_trial_003_visual_review/`.
+
+| Subsequent commissioning control | Rows | Net x request / response (mm) | Net rotation tracking error |
+|---|---:|---:|---:|
+| Restored start, selected spline, delta EE (004) | 24 | −18.425 / −16.252 | 3.188° |
+| Recorded prefix, delta EE (005) | 24 | −29.639 / −27.382 | 3.843° |
+| Recorded prefix, absolute EE (006) | 8 | −12.241 / −5.493 | 0.0646° |
+
+These are unscored, high-clearance approach controls at speed scale 0.1 and
+200 ms/row, not full-task evaluations. The recorded delta control also develops
+orientation error, so learning alone cannot explain that discrepancy. The
+absolute control is shorter and stops when translation lag makes the next
+chunk exceed the step bound; it also exposed a 1 mm rail hold quantization
+error. Slower absolute timing and corrected stationary-rail encoding are
+prepared but not yet physically validated. The lab's reference documentation
+independently records a hardware delta-EE rotation defect and recommends
+absolute EE. Xiatao confirms the front task table has no collision barrier.
+Detailed methodology, raw-report paths, reference-script findings and current
+test status: `docs/LAMP_REPLAY_COMMISSIONING_2026_09_13.md`.
+
+The physical plan starts with lamp commissioning, then separately diagnoses
+drawer and cabinet. Freeze models/settings before matched full-task trials;
+add one matched clock intervention only after baseline execution works. These
+task-caption models do not yet constitute a real-robot clause-steering experiment.
+
+Provenance and lab protocol: `cluster/launch_records/hardware_20260913.md`,
+`docs/HARDWARE_CLOSEOUT_2026-09-13.md`, and
+`outputs/hardware_lamp_20260913/replay_packet_v3/report.json`.
+
+### 10.3 Drawer checkpoint and gripper-input diagnostics (September 13)
+
+Job 2466201 completed an identical-input comparison of the 5k/10k/15k/20k
+checkpoints for both heads on an A40. The table uses only five held-out
+episodes, six offsets around first closure, and three inference-noise seeds.
+"Mean xyz" averages per-observation eight-step cumulative xyz-component RMSE,
+not physical endpoint error. All errors use the same nominal mm convention as
+the earlier hardware diagnostics (84 mm full-scale gripper opening).
+
+| Head | Updates | Gripper MAE, all offsets | Gripper MAE, at boundary | Mean xyz RMSE |
+|---|---:|---:|---:|---:|
+| Spline | 5k | 10.38 | 21.48 | 1.560 |
+| Spline | 10k | 10.25 | 22.88 | 1.357 |
+| Spline | 15k | 10.28 | 23.72 | 1.196 |
+| Spline | 20k | 10.09 | 25.39 | 1.046 |
+| Waypoint | 5k | 10.41 | 24.40 | 1.715 |
+| Waypoint | 10k | 9.71 | 26.21 | 1.045 |
+| Waypoint | 15k | 9.83 | 27.91 | 0.987 |
+| Waypoint | 20k | 9.67 | 27.89 | 1.062 |
+
+Later checkpoints improve approach prediction, but no earlier checkpoint
+uniformly improves pose and gripper prediction. Held-out boundary errors remain
+large; the error includes both early and late closure, not just delay. The
+nearby recorded images were inspected: the wrist view mainly shows drawer
+interiors, and the second view partly occludes the grasp knob. This is a
+possible source of ambiguity, not proof that visual occlusion alone causes the
+physical failures. These are nested checkpoints from one training run per
+head, not independent training-seed replications.
+
+Job 2466282 holds each of five recorded grasp-onset images/arm poses fixed and
+changes only the gripper input. Each entry below averages five observations
+and three inference-noise seeds; the output is the mean of eight predicted
+gripper targets, expressed in nominal mm.
+
+| Input opening fraction | Spline predicted opening | Waypoint predicted opening |
+|---|---:|---:|
+| 1.0 | 73.00 | 72.81 |
+| 0.9 | 25.72 | 25.27 |
+| 0.8 | 13.42 | 11.25 |
+| 0.7 | 10.70 | 8.13 |
+| 0.5 | 6.66 | 5.54 |
+
+This is evidence of model input dependence, not successful physical control:
+the perturbed sensor values deliberately disagree with the unchanged images.
+No altered state was supplied to a live policy, and this probe does not establish
+that removing the gripper input or collecting more demonstrations would solve
+the problem. The recorded-input conditions reproduce the checkpoint comparison.
+
+The recording metadata provides another important control: all 13 drawer
+sessions and both lamp sessions used speed scale 1.0, whereas our commissioning
+used 0.1 and later stretched command rows. A successful replay at different
+timing/settings cannot by itself isolate the learned policy as the sole failure
+source. Lamp prefix controls now document those settings and measured tracking
+(§10.2); no full demonstration replay has been completed by this workflow.
+
+Raw comparisons and probe arrays: `outputs/hardware_lamp_20260913/` under
+`drawer_checkpoint_comparison/` and `drawer_gripper_conditioning_2466282/`.
+Full decision rationale is in `docs/HARDWARE_CLOSEOUT_2026-09-13.md`.

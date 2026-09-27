@@ -14,6 +14,7 @@ import urllib.request
 from pathlib import Path
 
 import websockets
+from apollo_contact_review import require_contact_review_clear
 
 
 def request(url, method='GET', body=None):
@@ -42,6 +43,8 @@ async def main():
     p.add_argument('--seconds',type=float,default=15)
     p.add_argument('--url',default='http://127.0.0.1:8765')
     args = p.parse_args()
+    # Enabling a shadow hardware session can move the arms during startup.
+    require_contact_review_clear()
     if not args.confirm_supervised_shadow or not 0 < args.seconds <= 60:
         p.error('Requires explicit supervised-shadow authorization and 1–60 s duration')
     args.output.mkdir(parents=True,exist_ok=False)
