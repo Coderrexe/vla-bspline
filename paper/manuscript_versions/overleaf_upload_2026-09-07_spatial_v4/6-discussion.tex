@@ -1,8 +1,0 @@
-\section{Discussion and Conclusion}
-\label{sec:discussion}
-
-Event-spline policies benefit more from clause-aligned training than waypoint policies under an identical clause schedule. This interaction repeats across three seeds. The complete interface factorial shows the resulting trade-off: adapting to scheduled clauses improves their execution but reduces performance with a static whole-task caption. Order interventions show a corresponding change in the first completed subgoal, while RoboCasa extends the label comparison to longer manipulation sequences.
-
-Several boundaries remain. The head comparison uses one VLA backbone and two LIBERO tasks, and combines event alignment, compactness, and duration prediction. Reversed-order completion remains difficult, so the current results do not establish general recombination of learned skills. Fixed clause clocks also assume predictable phase timing; the action-release condition relaxes that assumption only for tasks with a suitable gripper event.
-
-Separating a predicted path from its duration lets the executor retime a motion without retraining the policy. CALVIN shows improved completion and pace for each frozen spline policy. An equally retimed waypoint is a strong control, establishing that generic temporal resampling is shared by both representations. The learned event duration provides the additional interface: it selects motions for compression and predicts when a new observation is useful. Together, the studies evaluate one action representation for selecting subgoals and controlling the timing of their motion.

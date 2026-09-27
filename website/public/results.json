@@ -87,7 +87,7 @@
       18.000000000000004
     ],
     "protocol": "LIBERO-Long t0/t4. Three training seeds; 100 rollouts per seed and condition. Identical fixed clause schedule at inference. Only training language labels change within each head.",
-    "source": "paper/results.md#executable-language-programs-on-libero-long"
+    "source": "/results.json"
   },
   "calvin": {
     "native": 1.3113333333333335,
@@ -104,7 +104,7 @@
       1.579,
       1.759
     ],
-    "source": "paper/results.md#2-calvin-human-teleop-dead-time-rich--the-flagship"
+    "source": "/results.json"
   },
   "robocasa": {
     "rows": [
@@ -141,7 +141,7 @@
         "n": 40
       }
     ],
-    "source": "paper/results.md#robocasa365-target-scene-execution-and-language-steering"
+    "source": "/results.json"
   },
   "queries": {
     "rows": [

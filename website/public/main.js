@@ -516,7 +516,9 @@ function renderResult(key) {
   $("#result-value-label").textContent = content.valueLabel;
   $("#result-note").textContent = content.note;
   $("#result-protocol").textContent = content.protocol;
-  $("#result-source").href = repository + content.source;
+  $("#result-source").href = content.source.startsWith("/")
+    ? content.source
+    : repository + content.source;
   $("#result-chart").innerHTML = chartSVG(content.chart);
 }
 $$("[data-result]").forEach((tab) =>

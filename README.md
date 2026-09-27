@@ -51,7 +51,7 @@ In the matched kettle scene, both policies pick up and place the kettle. The mod
 | **Can timing improve execution?** | CALVIN mean chain length **1.31 → 1.69**, at **1.42×** realized pace | Frozen spline policy; 3 seeds × 1,000 official chains per condition; +0.379, 95% CI [0.318, 0.441] |
 | **Can the policy make fewer queries?** | Object: **31.3 → 11.7** calls at **93% → 93%** success; Long: **73.8 → 33.0** at **61% → 62%** | 100 episodes per suite and condition; duration-scheduled replanning vs. fixed 5-step cadence |
 
-These are separate, scoped studies. The language gains compare **training labels under an identical clause schedule**, not native whole-caption inference against clause inference. CALVIN timing compares the spline to its own native decoder; a separate waypoint-interpolation control also benefits from retiming. RoboCasa's Rinse gain repeats across seeds, while Kettle is heterogeneous. Full tables and methodology are in the [results ledger](paper/results.md).
+These are separate, scoped studies. The language gains compare **training labels under an identical clause schedule**, not native whole-caption inference against clause inference. CALVIN timing compares the spline to its own native decoder; a separate waypoint-interpolation control also benefits from retiming. RoboCasa's Rinse gain repeats across seeds, while Kettle is heterogeneous. Explore the [interactive results](https://vla-bspline.vercel.app/#results) and [selected result data](website/public/results.json).
 
 ### Executable language across three seeds
 
@@ -74,7 +74,7 @@ The experiment holds **71 demonstrations / 19,378 frames**, physical trajectorie
 | **Predicted event scheduling** | Replan at **T̂ − 4** to preserve observed Object / Long success with **2.24–2.68× fewer calls** | A tuned fixed cadence is also competitive; this is query reduction, not a faster forward pass |
 | **Standard LIBERO competence** | Waypoint **82.1 ± 1.8%**; fixed-time spline **80.8 ± 2.5%**; event spline **80.7 ± 1.3%** | Four suites, three seeds; mean ± seed standard deviation |
 
-The full program also investigates duration calibration, feasibility-aware stretching, contact easing, and duration-based failure monitoring. The [complete ledger](paper/results.md) records their protocols, tradeoffs, and limitations.
+The full program also investigates duration calibration, feasibility-aware stretching, contact easing, and duration-based failure monitoring.
 
 </details>
 
@@ -111,7 +111,7 @@ Changing **α** changes pace. Changing **ρ** changes sampling density while pre
 - The spline is fitted in cumulative **command coordinates**, not reconstructed measured Cartesian poses. Summing rotational command components is not exact rotation composition.
 - Pose controls, gripper controls, and replicated log-duration targets are standardized per token. Production training and offline statistics share the same [event-target implementation](policy/smolvla_spline/event_targets.py) and [statistics contract](policy/smolvla_spline/stats_contract.py).
 - The study compares waypoint SmolVLA, fixed-time spline heads, and event-aligned spline heads. The latter bundles compactness, event boundaries, and duration; the language interaction does not isolate these components individually.
-- A waypoint baseline also supports retiming: denormalize, accumulate, interpolate the path, difference, and renormalize. The [matched CALVIN study](paper/results.md#matched-waypoint-interpolation-comparison-completed-7-september) tests this explicitly.
+- A waypoint baseline also supports retiming: denormalize, accumulate, interpolate the path, difference, and renormalize. The matched CALVIN study tests this explicitly.
 - Robot tracking, action clipping, and contact dynamics can alter the realized trajectory. Arbitrary speed or rate changes are not guaranteed to preserve task success.
 
 </details>
@@ -191,7 +191,7 @@ The policy package belongs under `lerobot/src/lerobot/policies/smolvla_spline/` 
 | Hardware fine-tuning | [train_apollo.py](scripts/train_apollo.py) |
 | Real-robot adapter | [run_apollo_dora.py](scripts/hardware/run_apollo_dora.py) |
 
-Cluster scripts encode the original environment paths, model caches, and resource requests; adapt them to your installation before submission. Checkpoints and raw demonstration data are not bundled in this repository. The [results ledger](paper/results.md) identifies the configurations and evidence behind each comparison.
+Cluster scripts encode the original environment paths, model caches, and resource requests; adapt them to your installation before submission. Checkpoints and raw demonstration data are not bundled in this repository. The [project website](https://vla-bspline.vercel.app/#results) presents selected comparisons and their evaluation scope.
 
 </details>
 
@@ -206,7 +206,6 @@ Cluster scripts encode the original environment paths, model caches, and resourc
 | [`scripts/analysis/`](scripts/analysis/) · [`scripts/figures/`](scripts/figures/) | Statistical analyses, mechanism studies, and figure generation |
 | [`tests/`](tests/) | Target parity, scheduler, normalization, evaluation, and deployment contracts |
 | [`cluster/`](cluster/) | Experiment launchers and training/evaluation recipes |
-| [`paper/results.md`](paper/results.md) | Comprehensive results and methodology |
 | [`website/`](website/) | Standalone project website, interactive decoder, and curated demo assets |
 
 ## Team and foundations
@@ -217,4 +216,4 @@ Cluster scripts encode the original environment paths, model caches, and resourc
 
 Built on [SmolVLA](https://huggingface.co/blog/smolvla) and [LeRobot](https://github.com/huggingface/lerobot), evaluated with [LIBERO](https://libero-project.github.io/), [CALVIN](https://calvin.cs.uni-freiburg.de/), and [RoboCasa365](https://robocasa.ai/). Their software, assets, and datasets retain their respective licenses. The official lab mark is used for attribution.
 
-The manuscript is in preparation. For now, the code, [documented results](paper/results.md), and [project website](https://vla-bspline.vercel.app/) provide the technical record. Demo origins and source hashes are listed in the [media manifest](website/public/media-manifest.json).
+The manuscript is in preparation and is not included in this repository. For now, the code, [selected result data](website/public/results.json), and [project website](https://vla-bspline.vercel.app/) provide the technical record. Demo origins and source hashes are listed in the [media manifest](website/public/media-manifest.json).

@@ -39,3 +39,7 @@ wandb/
 .env
 .env.*
 bc_demo/
+
+# Unpublished manuscript material (kept locally)
+/ICRA/
+/paper/
