@@ -24,7 +24,7 @@
   font-display: swap;
 }
 :root {
-  --paper: #f6f5ef;
+  --paper: #faf9f5;
   --ink: #173c3a;
   --text: #354943;
   --muted: #68756d;
@@ -105,7 +105,7 @@ h3 {
   font-family: var(--serif);
   font-weight: 400;
   letter-spacing: -0.025em;
-  line-height: 1.02;
+  line-height: 1.12;
 }
 h4 {
   font-size: 17px;
@@ -124,7 +124,7 @@ p {
   color: var(--ink);
 }
 .wrap {
-  max-width: 1248px;
+  max-width: 1168px;
   margin-inline: auto;
   padding-inline: 40px;
 }
@@ -210,8 +210,8 @@ p {
   border-radius: 3px;
 }
 .hero {
-  padding-top: 100px;
-  padding-bottom: 62px;
+  padding-top: 72px;
+  padding-bottom: 72px;
   display: grid;
   grid-template-columns: 1.04fr 1fr;
   gap: 54px;
@@ -231,36 +231,48 @@ p {
   box-shadow: 0 0 0 4px #e5eadb;
 }
 .hero h1 {
-  font-size: clamp(64px, 6.25vw, 89px);
-  margin: 28px -15px 22px 0;
+  font-size: clamp(48px, 5vw, 68px);
+  margin: 0 0 18px;
   letter-spacing: -0.025em;
 }
 .hero-description {
-  font-size: 18px;
-  line-height: 1.6;
-  margin-bottom: 20px;
+  font-size: 21px;
+  line-height: 1.45;
+  margin-bottom: 18px;
   color: var(--ink);
 }
 .hero-explainer {
-  font-size: 13px;
+  font-size: 14px;
   max-width: 440px;
   color: var(--muted);
   line-height: 1.8;
 }
 .hero-authors {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0 22px;
-  margin-top: 27px;
+  gap: 24px;
+  margin-top: 28px;
   font-size: 12px;
 }
-.hero-authors a {
-  border-bottom: 1px solid #b9c4b7;
+.author {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.author img {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+}
+a.author:hover span {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 .affiliation {
   font-size: 11px;
   color: var(--muted);
-  margin-top: 7px;
+  margin-top: 19px;
 }
 .affiliation a {
   color: var(--ink);
@@ -326,19 +338,15 @@ p {
   align-self: center;
   position: relative;
   margin-top: 2px;
-  padding-bottom: 55px;
+  padding-bottom: 0;
 }
 .film-topline {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--ink);
-  color: #d5e0ce;
-  padding: 13px 15px;
-  font-family: var(--mono);
-  font-size: 8px;
-  letter-spacing: 0.08em;
-  border-radius: 4px 4px 0 0;
+  color: var(--muted);
+  padding: 0 0 12px;
+  font-size: 11px;
 }
 .film-topline > span:first-child {
   display: flex;
@@ -367,6 +375,7 @@ p {
   flex-direction: column;
   padding: 20px 12px 13px 18px;
   color: #b8c9b9;
+  justify-content: center;
 }
 .program-list > .tiny-label {
   font-size: 8px;
@@ -411,11 +420,9 @@ p {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
-  border: 1px solid #b7c3b3;
-  border-top: 0;
-  font-family: var(--mono);
-  font-size: 9px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
 }
 .separator {
   color: #96a28f;
@@ -534,25 +541,22 @@ p {
   text-underline-offset: 3px;
 }
 .section {
-  padding-top: 105px;
-  padding-bottom: 100px;
+  padding-top: 65px;
+  padding-bottom: 65px;
 }
 .section-heading {
-  display: grid;
-  grid-template-columns: 1fr 2.04fr;
-  gap: 52px;
-  margin-bottom: 44px;
+  margin-bottom: 32px;
 }
 .section-heading > .section-index {
   padding-top: 10px;
 }
 .section-heading h2 {
-  font-size: 67px;
+  font-size: 43px;
 }
 .section-heading > div > p {
-  max-width: 580px;
+  max-width: 690px;
   font-size: 14px;
-  margin-top: 20px;
+  margin-top: 14px;
   line-height: 1.8;
   color: var(--muted);
 }
@@ -593,9 +597,7 @@ p {
   gap: 24px;
 }
 .comparison figure {
-  background: #eeeee5;
-  border: 1px solid var(--line);
-  padding: 14px 14px 0;
+  min-width: 0;
 }
 .comparison video {
   width: 100%;
@@ -609,25 +611,20 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-family: var(--mono);
-  font-size: 9px;
+  font-size: 11px;
   margin-bottom: 12px;
   color: #686f65;
 }
 .tag {
-  font-family: var(--mono);
-  font-size: 8px;
-  letter-spacing: 0.015em;
-  padding: 5px 7px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .muted-tag {
-  background: #dedfd4;
   color: #475048;
 }
 .green-tag {
-  background: var(--lime);
   color: var(--ink);
+  font-weight: 600;
 }
 .success {
   color: #375a2e;
@@ -730,8 +727,7 @@ p {
   text-align: right;
 }
 .method-section {
-  background: #eceedf;
-  border-block: 1px solid #d5ddc8;
+  border-block: 1px solid var(--line);
 }
 .architecture {
   display: grid;
@@ -742,7 +738,9 @@ p {
 }
 .architecture-part .step-label {
   color: var(--muted);
-  font-size: 9px;
+  font-family: var(--sans);
+  font-size: 12px;
+  letter-spacing: 0;
   display: block;
   margin-bottom: 23px;
 }
@@ -838,8 +836,8 @@ p {
   font-size: 9px;
 }
 .explorer h3 {
-  font-size: 57px;
-  margin-top: 18px;
+  font-size: 32px;
+  margin-top: 0;
   margin-bottom: 18px;
 }
 .explorer-copy > p:not(.eyebrow) {
@@ -1085,7 +1083,6 @@ input[type="range"] {
 .results-tabs button[aria-selected="true"] {
   border-color: var(--ink);
   color: var(--ink);
-  background: #eaede1;
 }
 .results-tabs button span {
   font-family: var(--mono);
@@ -1201,9 +1198,8 @@ input[type="range"] {
   margin-bottom: 26px;
 }
 .hardware-section {
-  background: #e9ede3;
-  border-block: 1px solid #d3dbcc;
-  padding: 80px 0;
+  border-block: 1px solid var(--line);
+  padding: 65px 0;
 }
 .hardware-grid {
   display: grid;
@@ -1212,8 +1208,8 @@ input[type="range"] {
   align-items: center;
 }
 .hardware-copy h2 {
-  font-size: 62px;
-  margin: 23px 0;
+  font-size: 43px;
+  margin: 0 0 20px;
 }
 .hardware-copy > p:not(.section-index):not(.small-note) {
   font-size: 12px;
@@ -1235,16 +1231,14 @@ input[type="range"] {
   color: #496143;
 }
 .hardware-copy .small-note {
+  margin-top: 20px;
   margin-bottom: 20px;
 }
 .hardware-video {
-  border: 1px solid #bac6b4;
-  background: #f4f5ee;
-  padding: 12px;
+  min-width: 0;
 }
 .hardware-video-label {
-  font-family: var(--mono);
-  font-size: 8px;
+  font-size: 11px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1264,19 +1258,30 @@ input[type="range"] {
 }
 .build-section {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 95px;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 60px;
   align-items: center;
 }
 .build-section h2 {
-  font-size: 62px;
-  margin: 25px 0;
+  font-size: 36px;
+  margin: 0 0 18px;
 }
 .build-section p:not(.section-index) {
   font-size: 13px;
   color: var(--muted);
-  max-width: 390px;
-  margin-bottom: 25px;
+  max-width: 500px;
+  margin-bottom: 18px;
+}
+.resource-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  font-size: 12px;
+}
+.resource-links a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-color: #b9c4b7;
 }
 .code-map {
   border-top: 1px solid var(--line);
@@ -1382,9 +1387,7 @@ footer .brand {
   font-size: 14px;
 }
 footer p {
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 18px;
+  font-size: 11px;
   color: var(--muted);
 }
 footer > div {
@@ -1416,11 +1419,11 @@ footer > div {
 }
 @media (min-width: 1500px) {
   .hero {
-    padding-top: 118px;
-    padding-bottom: 82px;
+    padding-top: 85px;
+    padding-bottom: 75px;
   }
   .hero h1 {
-    font-size: 91px;
+    font-size: 68px;
   }
   .hero-video-layout {
     grid-template-columns: minmax(0, 1fr) 142px;
@@ -1432,7 +1435,7 @@ footer > div {
     padding-top: 70px;
   }
   .hero h1 {
-    font-size: 70px;
+    font-size: 56px;
   }
   .hero-video-layout {
     grid-template-columns: minmax(0, 1fr) 114px;
@@ -1460,7 +1463,7 @@ footer > div {
     font-size: 11px;
   }
   .section-heading h2 {
-    font-size: 60px;
+    font-size: 43px;
   }
   .comparison-label {
     flex-wrap: wrap;
@@ -1482,7 +1485,7 @@ footer > div {
     padding: 28px 22px;
   }
   .explorer h3 {
-    font-size: 49px;
+    font-size: 32px;
   }
   .explorer-controls {
     gap: 20px;
@@ -1495,7 +1498,7 @@ footer > div {
     gap: 40px;
   }
   .hardware-copy h2 {
-    font-size: 55px;
+    font-size: 43px;
   }
   .build-section {
     gap: 60px;
@@ -1540,7 +1543,7 @@ footer > div {
     max-width: 590px;
   }
   .hero h1 {
-    font-size: 85px;
+    font-size: 64px;
   }
   .hero-description {
     font-size: 19px;
@@ -1559,7 +1562,7 @@ footer > div {
     max-width: 570px;
     width: 100%;
     justify-self: center;
-    padding-bottom: 46px;
+    padding-bottom: 0;
   }
   .hero-video-layout {
     grid-template-columns: minmax(0, 1fr) 145px;
@@ -1632,7 +1635,7 @@ footer > div {
     gap: 18px;
   }
   .section-heading h2 {
-    font-size: 62px;
+    font-size: 42px;
   }
   .section-heading > .section-index {
     padding: 0;
@@ -1648,12 +1651,12 @@ footer > div {
     align-content: space-between;
   }
   .comparison-label .tag {
-    font-size: 7px;
+    font-size: 11px;
     letter-spacing: 0;
-    padding: 4px;
+    padding: 0;
   }
   .comparison figure {
-    padding: 10px 10px 0;
+    padding: 0;
   }
   .comparison video {
     max-height: 340px;
@@ -1719,8 +1722,8 @@ footer > div {
     display: block;
   }
   .explorer h3 {
-    font-size: 44px;
-    margin-top: 12px;
+    font-size: 32px;
+    margin-top: 0;
   }
   .explorer h3 br {
     display: none;
@@ -1793,7 +1796,7 @@ footer > div {
     gap: 35px;
   }
   .hardware-copy h2 {
-    font-size: 58px;
+    font-size: 42px;
   }
   .hardware-copy > p {
     max-width: 590px;
@@ -1811,7 +1814,7 @@ footer > div {
     max-width: 500px;
   }
   .build-section h2 {
-    font-size: 56px;
+    font-size: 36px;
   }
   .build-section h2 br {
     display: none;
@@ -1856,8 +1859,8 @@ footer > div {
     gap: 32px;
   }
   .hero h1 {
-    font-size: 66px;
-    margin: 24px 0 18px;
+    font-size: 51px;
+    margin: 0 0 16px;
   }
   .hero-description {
     font-size: 17px;
@@ -1867,7 +1870,11 @@ footer > div {
   }
   .hero-authors {
     font-size: 11px;
-    gap: 19px;
+    gap: 20px;
+  }
+  .author img {
+    width: 76px;
+    height: 76px;
   }
   .affiliation {
     font-size: 10px;
@@ -1884,14 +1891,14 @@ footer > div {
     gap: 6px;
   }
   .hero-status {
-    font-size: 8px;
+    font-size: 9px;
   }
   .hero-video-layout {
     grid-template-columns: minmax(0, 1fr) 110px;
   }
   .film-topline {
-    font-size: 7px;
-    padding: 11px;
+    font-size: 10px;
+    padding: 0 0 10px;
   }
   .program-list {
     padding: 14px 8px 10px 12px;
@@ -1910,8 +1917,8 @@ footer > div {
     padding-top: 8px;
   }
   .film-footer {
-    font-size: 8px;
-    padding: 11px;
+    font-size: 10px;
+    padding: 10px 0;
   }
   .film-caption {
     font-size: 9px;
@@ -1977,7 +1984,7 @@ footer > div {
     margin-bottom: 30px;
   }
   .section-heading h2 {
-    font-size: 52px;
+    font-size: 36px;
   }
   .section-heading > div > p {
     font-size: 12px;
@@ -2005,7 +2012,7 @@ footer > div {
     gap: 10px;
   }
   .comparison figure {
-    padding: 7px 7px 0;
+    padding: 0;
   }
   .comparison-label {
     min-height: 55px;
@@ -2013,10 +2020,10 @@ footer > div {
     line-height: 1.4;
   }
   .comparison-label .tag {
-    font-size: 7px;
+    font-size: 10px;
     white-space: normal;
     line-height: 1.5;
-    padding: 3px 4px;
+    padding: 0;
   }
   .comparison figcaption {
     font-size: 9px;
@@ -2097,7 +2104,7 @@ footer > div {
     padding: 22px 18px;
   }
   .explorer h3 {
-    font-size: 41px;
+    font-size: 30px;
   }
   .explorer-copy > p:not(.eyebrow) {
     font-size: 11px;
@@ -2197,7 +2204,7 @@ footer > div {
     padding: 55px 0;
   }
   .hardware-copy h2 {
-    font-size: 52px;
+    font-size: 36px;
   }
   .hardware-copy > p:not(.section-index):not(.small-note) {
     font-size: 11px;
@@ -2209,16 +2216,16 @@ footer > div {
     font-size: 7px;
   }
   .hardware-video-label {
-    font-size: 7px;
+    font-size: 10px;
   }
   .hardware-video {
-    padding: 9px;
+    padding: 0;
   }
   .hardware-video figcaption {
     font-size: 8px;
   }
   .build-section h2 {
-    font-size: 50px;
+    font-size: 34px;
   }
   .build-section p:not(.section-index) {
     font-size: 12px;

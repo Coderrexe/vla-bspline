@@ -4,7 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#f6f5ef" />
-    <title>VLA B-Spline — Language in steps. Motion in curves.</title>
+    <title>
+      VLA B-Spline — Event-aligned action programs for robot learning
+    </title>
     <meta
       name="description"
       content="Event-aligned B-spline action programs for vision-language-action robot policies. Executable language, continuous motion, and a controllable physical clock. By Simba Shi, Quinten Jin, and Xiatao Sun, in collaboration with Yale APOLLO Lab."
@@ -13,7 +15,7 @@
     <meta property="og:type" content="website" />
     <meta
       property="og:title"
-      content="VLA B-Spline — Language in steps. Motion in curves."
+      content="VLA B-Spline — Event-aligned action programs for robot learning"
     />
     <meta
       property="og:description"
@@ -59,8 +61,8 @@
         ></a
       >
       <nav aria-label="Main navigation">
-        <a href="#demos">In motion</a><a href="#method">The idea</a
-        ><a href="#results">Results</a><a href="#hardware">In the lab</a>
+        <a href="#demos">Demos</a><a href="#method">Method</a
+        ><a href="#results">Results</a><a href="#hardware">Hardware</a>
       </nav>
       <a
         class="nav-code"
@@ -74,26 +76,45 @@
     <main id="main">
       <section class="hero wrap" aria-labelledby="hero-heading">
         <div class="hero-copy">
-          <p class="eyebrow">
-            <span class="live-dot"></span> A ROBOT LEARNING RESEARCH PROJECT
-          </p>
-          <h1 id="hero-heading">
-            Language in steps.<br />
-            Motion in <em>curves.</em>
-          </h1>
+          <h1 id="hero-heading">VLA B-Spline</h1>
           <p class="hero-description">
-            Give a robot the next instruction.<br />
-            Let it learn the motion. Keep control of the clock.
+            Event-aligned action programs<br />for language-guided robot
+            learning
           </p>
           <p class="hero-explainer">
-            VLA B-Spline turns vision and language into compact, continuous
-            action programs: eight spline tokens, an explicit duration, and a
-            sequence of executable language clauses.
+            We teach robot policies to follow a task one instruction at a time
+            and predict continuous motion with B-splines. Separating the path
+            from its duration lets us adjust execution speed and control rate
+            without retraining.
           </p>
-          <div class="hero-authors">
-            <a href="https://www.simbashi.com/">Simba Shi</a
-            ><span>Quinten Jin</span
-            ><a href="https://sunxiatao.me/">Xiatao Sun</a>
+          <div class="hero-authors" aria-label="Authors">
+            <a class="author" href="https://www.simbashi.com/">
+              <img
+                src="/media/authors/simba.png"
+                width="88"
+                height="88"
+                alt="Simba Shi"
+              />
+              <span>Simba Shi</span>
+            </a>
+            <div class="author">
+              <img
+                src="/media/authors/quinten.png"
+                width="88"
+                height="88"
+                alt="Quinten Jin"
+              />
+              <span>Quinten Jin</span>
+            </div>
+            <a class="author" href="https://sunxiatao.me/">
+              <img
+                src="/media/authors/xiatao.png"
+                width="88"
+                height="88"
+                alt="Xiatao Sun"
+              />
+              <span>Xiatao Sun</span>
+            </a>
           </div>
           <p class="affiliation">
             In collaboration with
@@ -103,17 +124,20 @@
           </p>
           <div class="hero-actions">
             <a class="button dark" href="#demos"
-              >Watch the policies <span aria-hidden="true">↓</span></a
-            ><a class="text-link" href="#method"
-              >Explore the method <span aria-hidden="true">↗</span></a
+              >Watch demos <span aria-hidden="true">↓</span></a
+            ><a
+              class="text-link"
+              href="https://github.com/Coderrexe/vla-bspline"
+              >Code <span aria-hidden="true">↗</span></a
             >
           </div>
-          <p class="hero-status">Ongoing research · SmolVLA / LeRobot · 2026</p>
+          <p class="hero-status">
+            SmolVLA / LeRobot · LIBERO, CALVIN &amp; RoboCasa365
+          </p>
         </div>
         <div class="hero-film">
           <div class="film-topline">
-            <span><span class="record-dot"></span> ROBOCASA365</span
-            ><span>LEARNED POLICY</span>
+            <span>RoboCasa365</span><span>Learned policy rollout</span>
           </div>
           <div class="hero-video-layout">
             <video
@@ -128,7 +152,6 @@
               <source src="/media/kettle.mp4" type="video/mp4" />
             </video>
             <div class="program-list" aria-label="Language program">
-              <span class="tiny-label">THE PROGRAM</span>
               <div class="program-step is-active" data-phase="0">
                 <span class="phase-number">01</span
                 ><span
@@ -150,10 +173,6 @@
                   the burner.</span
                 >
               </div>
-              <span class="program-foot"
-                >ONE CLAUSE<br />
-                AT A TIME</span
-              >
             </div>
           </div>
           <div class="film-footer">
@@ -171,75 +190,18 @@
             A selected successful simulation rollout. Clause highlights follow
             the recorded switch steps; wording is shortened for display.
           </p>
-          <svg class="hero-spline" viewBox="0 0 500 66" aria-hidden="true">
-            <path
-              d="M0 48C45 48 58 9 114 9S192 62 250 47 323 12 380 27 436 63 500 15"
-            />
-            <circle cx="114" cy="9" r="4" />
-            <circle cx="250" cy="47" r="4" />
-            <circle cx="380" cy="27" r="4" />
-          </svg>
         </div>
       </section>
-
-      <section class="metrics wrap" aria-label="Selected research results">
-        <div class="metric">
-          <p class="metric-number">+43.7<span>pp</span></p>
-          <h2>Better clause execution</h2>
-          <p>
-            LIBERO-Long t0/t4, three training seeds.<br />
-            11.7% → 55.3% under the same clause schedule.
-          </p>
-          <a href="#results"
-            >See the controlled comparison <span aria-hidden="true">↗</span></a
-          >
-        </div>
-        <div class="metric">
-          <p class="metric-number">1.42<span>×</span></p>
-          <h2>Faster, with deeper task chains</h2>
-          <p>
-            CALVIN, 3,000 chains per condition.<br />
-            +0.379 mean chain length vs. native spline.
-          </p>
-          <a href="#results" data-result-link="clock"
-            >See the timing study <span aria-hidden="true">↗</span></a
-          >
-        </div>
-        <div class="metric">
-          <p class="metric-number">2.68<span>×</span></p>
-          <h2>Fewer policy queries</h2>
-          <p>
-            LIBERO Object, 100 episodes per condition.<br />
-            93% success with 31.3 → 11.7 calls per episode.
-          </p>
-          <a href="#results" data-result-link="queries"
-            >See the compute tradeoff <span aria-hidden="true">↗</span></a
-          >
-        </div>
-      </section>
-
-      <div class="benchmark-strip wrap">
-        <span class="tiny-label">EVALUATED IN</span><span>LIBERO</span
-        ><span>CALVIN</span><span>RoboCasa365</span
-        ><span class="strip-end"
-          >Built on <a href="https://huggingface.co/blog/smolvla">SmolVLA</a> +
-          <a href="https://github.com/huggingface/lerobot">LeRobot</a></span
-        >
-      </div>
 
       <section id="demos" class="section wrap" aria-labelledby="demos-heading">
         <div class="section-heading">
-          <p class="section-index">01 / IN MOTION</p>
           <div>
-            <h2 id="demos-heading">
-              The right action.<br />
-              <em>At the right phase.</em>
-            </h2>
+            <h2 id="demos-heading">Policy rollouts</h2>
             <p>
-              Long tasks can fail after the robot has already done the hard
-              part. In this scene, both policies pick up and place the kettle.
-              Learning the executable phases helps the robot move on to the
-              burner.
+              Same scene, same instructions at inference. The difference is
+              whether the policy was trained with whole-task captions or
+              executable phase labels. These are selected paired rollouts;
+              aggregate results are below.
             </p>
           </div>
         </div>
@@ -280,7 +242,7 @@
         >
           <figure>
             <div class="comparison-label">
-              <span class="tag muted-tag">WHOLE-TASK TRAINING LABELS</span
+              <span class="tag muted-tag">Whole-task labels</span
               ><span id="baseline-outcome">Task incomplete</span>
             </div>
             <video
@@ -300,7 +262,7 @@
           </figure>
           <figure>
             <div class="comparison-label">
-              <span class="tag green-tag">OFFICIAL PHASE TRAINING LABELS</span
+              <span class="tag green-tag">Official phase labels</span
               ><span id="phase-outcome" class="success">Task complete ✓</span>
             </div>
             <video
@@ -357,7 +319,7 @@
         </p>
         <div class="demo-bottom">
           <div>
-            <h3>Beyond a single rollout</h3>
+            <h3>RoboCasa365 completion</h3>
             <p>
               Across KettleBoiling and RinseSinkBasin, official phase labels
               improve aggregate completion in both training seeds. The Rinse
@@ -406,12 +368,8 @@
       >
         <div class="wrap section">
           <div class="section-heading">
-            <p class="section-index">02 / THE REPRESENTATION</p>
             <div>
-              <h2 id="method-heading">
-                A small program.<br />
-                <em>Two kinds of control.</em>
-              </h2>
+              <h2 id="method-heading">The action representation</h2>
               <p>
                 Language chooses the active subgoal. A spline specifies a short
                 motion segment. Its predicted duration gives the decoder an
@@ -421,7 +379,7 @@
           </div>
           <div class="architecture">
             <div class="architecture-part">
-              <span class="step-label">01 / CONDITION</span>
+              <span class="step-label">Input</span>
               <div class="input-line">
                 <span class="input-dot"></span>Images + robot state
               </div>
@@ -432,7 +390,7 @@
             </div>
             <span class="arch-arrow" aria-hidden="true">→</span>
             <div class="architecture-part">
-              <span class="step-label">02 / PREDICT</span>
+              <span class="step-label">Prediction</span>
               <div
                 class="token-strip"
                 role="img"
@@ -448,7 +406,7 @@
             </div>
             <span class="arch-arrow" aria-hidden="true">→</span>
             <div class="architecture-part">
-              <span class="step-label">03 / EXECUTE</span
+              <span class="step-label">Execution</span
               ><svg
                 viewBox="0 0 240 52"
                 class="decode-curve"
@@ -473,11 +431,7 @@
           </div>
           <div class="explorer" aria-labelledby="explorer-heading">
             <div class="explorer-copy">
-              <p class="eyebrow">TRY THE DECODER</p>
-              <h3 id="explorer-heading">
-                One curve.<br />
-                <em>Your clock.</em>
-              </h3>
+              <h3 id="explorer-heading">Adjust the timing</h3>
               <p>
                 Change the duration or control rate. The predicted path and its
                 endpoint stay fixed; the action spacing and execution time
@@ -592,7 +546,7 @@
           </div>
           <details class="technical-detail">
             <summary>
-              The mathematics, without the hand-waving
+              Technical details
               <span aria-hidden="true">+</span>
             </summary>
             <div class="technical-grid">
@@ -643,15 +597,11 @@
         aria-labelledby="results-heading"
       >
         <div class="section-heading">
-          <p class="section-index">03 / THE EVIDENCE</p>
           <div>
-            <h2 id="results-heading">
-              Measured behavior.<br />
-              <em>Across seeds and tasks.</em>
-            </h2>
+            <h2 id="results-heading">Results</h2>
             <p>
-              Controlled label interventions, paired rollouts, and explicit
-              timing baselines make each result interpretable.
+              Language supervision, execution timing, and policy query cost,
+              tested in separate controlled studies.
             </p>
           </div>
         </div>
@@ -663,7 +613,7 @@
             aria-controls="result-panel"
             data-result="language"
           >
-            Language programs <span>01</span></button
+            Language programs</button
           ><button
             id="tab-clock"
             role="tab"
@@ -672,7 +622,7 @@
             tabindex="-1"
             data-result="clock"
           >
-            Physical clock <span>02</span></button
+            Execution timing</button
           ><button
             id="tab-queries"
             role="tab"
@@ -681,7 +631,7 @@
             tabindex="-1"
             data-result="queries"
           >
-            Policy queries <span>03</span>
+            Policy queries
           </button>
         </div>
         <div
@@ -739,7 +689,7 @@
         </div>
         <details class="technical-detail">
           <summary>
-            More of the research <span aria-hidden="true">+</span>
+            Additional experiments <span aria-hidden="true">+</span>
           </summary>
           <div class="further-results">
             <article>
@@ -800,12 +750,7 @@
       >
         <div class="wrap hardware-grid">
           <div class="hardware-copy">
-            <p class="section-index">04 / FROM SIMULATION TO THE LAB</p>
-            <h2 id="hardware-heading">
-              Real cameras.<br />
-              Real contact.<br />
-              <em>Real engineering.</em>
-            </h2>
+            <h2 id="hardware-heading">On the real robot</h2>
             <p>
               The project extends to the APOLLO Mavis V2 platform: an arm and
               linear rail, two camera streams, a gripper, and custom 3D-printed
@@ -817,10 +762,6 @@
               inference interface with observation adapters, action decoding,
               and recorded trajectory replay.
             </p>
-            <div class="hardware-facts">
-              <span>3 assembly tasks</span><span>Human teleoperation</span
-              ><span>Dora integration</span>
-            </div>
             <p class="small-note">
               The video shows a human teleoperation demonstration used for
               training. Hardware evaluation is ongoing; the quantitative policy
@@ -835,8 +776,7 @@
           </div>
           <figure class="hardware-video">
             <div class="hardware-video-label">
-              <span class="record-dot"></span> LAMP ASSEMBLY / TRAINING
-              DEMONSTRATION
+              Lamp assembly · Human demonstration
             </div>
             <video
               controls
@@ -860,69 +800,23 @@
         aria-labelledby="build-heading"
       >
         <div>
-          <p class="section-index">05 / OPEN THE HOOD</p>
-          <h2 id="build-heading">
-            Built to be<br />
-            <em>looked into.</em>
-          </h2>
+          <h2 id="build-heading">Code &amp; documentation</h2>
           <p>
             Policy code, training scripts, evaluation protocols, and a detailed
             results ledger. The action head fits into SmolVLA without changing
             its vision–language backbone.
           </p>
-          <a class="button dark" href="https://github.com/Coderrexe/vla-bspline"
-            >Explore the repository <span aria-hidden="true">↗</span></a
-          >
-        </div>
-        <div class="code-map">
-          <a
-            href="https://github.com/Coderrexe/vla-bspline/tree/main/policy/smolvla_spline"
-            ><span>01</span>
-            <div>
-              <strong>The action head</strong
-              ><code>policy/smolvla_spline/</code>
-            </div>
-            <span>↗</span></a
-          ><a href="https://github.com/Coderrexe/vla-bspline/tree/main/scripts"
-            ><span>02</span>
-            <div>
-              <strong>Data, evaluation &amp; deployment</strong
-              ><code>scripts/</code>
-            </div>
-            <span>↗</span></a
-          ><a href="https://github.com/Coderrexe/vla-bspline/tree/main/cluster"
-            ><span>03</span>
-            <div><strong>Experiment recipes</strong><code>cluster/</code></div>
-            <span>↗</span></a
-          ><a
-            href="https://github.com/Coderrexe/vla-bspline/blob/main/paper/results.md"
-            ><span>04</span>
-            <div>
-              <strong>Results &amp; methodology</strong
-              ><code>paper/results.md</code>
-            </div>
-            <span>↗</span></a
-          >
-        </div>
-      </section>
-
-      <section class="team-section wrap" aria-labelledby="team-heading">
-        <p class="section-index" id="team-heading">
-          THE PEOPLE BEHIND THE PROJECT
-        </p>
-        <div class="team">
-          <a href="https://www.simbashi.com/"
-            ><span class="author-initial">SS</span><strong>Simba Shi</strong
-            ><span>Personal website ↗</span></a
-          >
-          <div>
-            <span class="author-initial">QJ</span><strong>Quinten Jin</strong
-            ><span>Research collaborator</span>
+          <div class="resource-links">
+            <a href="https://github.com/Coderrexe/vla-bspline">Repository ↗</a>
+            <a
+              href="https://github.com/Coderrexe/vla-bspline/tree/main/policy/smolvla_spline"
+              >Policy implementation ↗</a
+            >
+            <a
+              href="https://github.com/Coderrexe/vla-bspline/blob/main/paper/results.md"
+              >Results &amp; methodology ↗</a
+            >
           </div>
-          <a href="https://sunxiatao.me/"
-            ><span class="author-initial">XS</span><strong>Xiatao Sun</strong
-            ><span>Personal website ↗</span></a
-          >
         </div>
         <div class="lab-credit">
           <p>In collaboration with</p>
@@ -942,7 +836,7 @@
         ><img src="/favicon.svg" width="24" height="24" alt="" />VLA
         B-Spline.</a
       >
-      <p>Language in steps. Motion in curves.</p>
+      <p>Robot learning research · 2026</p>
       <div>
         <a href="/media-manifest.json">Media provenance</a
         ><a href="https://github.com/Coderrexe/vla-bspline">Code ↗</a>

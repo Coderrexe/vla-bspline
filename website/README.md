@@ -46,6 +46,7 @@ robot endpoints, SSH configuration, or raw dataset directory is deployed.
 | `public/media-manifest.json` | Video origins, hashes, outcomes, matched-scene identities |
 | `public/media/` | Curated real videos, posters, README animation, vector figures |
 | `tools/prepare_assets.py` | Regenerates evidence exports and derived presentation media |
+| `tools/prepare_portraits.py` | Crops supplied author photos into circular, metadata-free PNGs |
 | `tools/check.mjs` | Link, data, provenance, and public-build checks |
 
 The media generator requires the original local `outputs/` and lamp demonstration,
@@ -78,6 +79,8 @@ to a model, simulator, or robot.
 - Rollouts and demonstration recordings: this project. Simulation assets belong to their upstream benchmark authors.
 - The [Spatial-MemER website](https://spatial-memer.vercel.app/) informed the editorial emphasis on an approachable research explanation and visible demonstrations. This site's code, layout, figures, and interactions are newly implemented.
 
-Author portraits can be added later; the current design deliberately uses initials
-and names. There is no publication badge or manuscript link while the paper is in
-preparation.
+Author portraits are derived from the user-supplied `photos/` originals. Run
+`python website/tools/prepare_portraits.py` from a Pillow environment to regenerate
+them. Only the cropped public PNGs are needed for deployment or the README;
+original photographs remain untouched. There is no publication badge or manuscript
+link while the paper is in preparation.

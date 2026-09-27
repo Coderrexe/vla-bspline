@@ -6,6 +6,12 @@ const root = resolve(import.meta.dirname, "../public");
 const html = await readFile(resolve(root, "index.html"), "utf8");
 const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
 assert.equal(new Set(ids).size, ids.length, "Duplicate element IDs");
+for (const name of ["simba", "quinten", "xiatao"]) {
+  assert(
+    html.includes(`/media/authors/${name}.png`),
+    `Missing author portrait: ${name}`,
+  );
+}
 for (const [, href] of html.matchAll(/(?:href|src|poster)="([^"]+)"/g)) {
   if (href.startsWith("#") && href !== "#")
     assert(ids.includes(href.slice(1)), `Missing anchor ${href}`);

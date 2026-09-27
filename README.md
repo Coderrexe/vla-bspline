@@ -8,7 +8,13 @@
 
 **Event-aligned spline action programs for vision–language–action robot policies**
 
-**[Simba Shi](https://www.simbashi.com/) · Quinten Jin · [Xiatao Sun](https://sunxiatao.me/)**
+<table>
+<tr>
+<td align="center" width="150"><a href="https://www.simbashi.com/"><img src="website/public/media/authors/simba.png" width="96" height="96" alt="Simba Shi"><br><strong>Simba Shi</strong></a></td>
+<td align="center" width="150"><img src="website/public/media/authors/quinten.png" width="96" height="96" alt="Quinten Jin"><br><strong>Quinten Jin</strong></td>
+<td align="center" width="150"><a href="https://sunxiatao.me/"><img src="website/public/media/authors/xiatao.png" width="96" height="96" alt="Xiatao Sun"><br><strong>Xiatao Sun</strong></a></td>
+</tr>
+</table>
 
 In collaboration with **[Yale APOLLO Lab](https://apollo-lab-yale.github.io/)**
 

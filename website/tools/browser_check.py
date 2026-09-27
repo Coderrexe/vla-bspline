@@ -24,6 +24,9 @@ def main():
         page.on('response', lambda r: report['failed_assets'].append([r.url,r.status]) if r.status>=400 and r.url.startswith(args.url) else None)
         page.goto(args.url, wait_until='networkidle')
         assert page.title().startswith('VLA B-Spline')
+        portraits = page.locator('.hero-authors img')
+        assert portraits.count() == 3
+        assert portraits.evaluate_all('(images)=>images.every(i=>i.complete && i.naturalWidth===256)'), 'Author portraits failed to load'
         assert page.locator('#hero-video').evaluate('(v)=>v.paused'), 'Reduced-motion autoplay'
         for width in (360,390,768,1024,1440):
             page.set_viewport_size({'width':width,'height':1000})
@@ -76,6 +79,7 @@ def main():
             report['accessibility']=[{'id':v['id'],'impact':v['impact'],'nodes':[{'target':n['target'],'summary':n.get('failureSummary')} for n in v['nodes']]} for v in violations]
         if args.screenshots:
             args.screenshots.mkdir(parents=True,exist_ok=True)
+            page.wait_for_function('!document.querySelector("#toast").classList.contains("visible")')
             page.evaluate('window.scrollTo(0,0)')
             page.screenshot(path=str(args.screenshots/'desktop.png'),full_page=True)
             page.screenshot(path=str(args.screenshots/'desktop-hero.png'))
