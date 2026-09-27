@@ -18,7 +18,7 @@
 
 In collaboration with **[Yale APOLLO Lab](https://apollo-lab-yale.github.io/)**
 
-[**Explore the project & watch demos ↗**](https://vla-bspline.vercel.app/) · [Method](#the-method) · [Results](#selected-results) · [Get started](#get-started)
+[**Explore project & watch demos ↗**](https://vla-bspline.vercel.app/)
 
 ![Research](https://img.shields.io/badge/Status-Ongoing_research-173c3a?style=flat-square)
 ![Backbone](https://img.shields.io/badge/Backbone-SmolVLA-536d55?style=flat-square)
