@@ -25,7 +25,7 @@ In collaboration with **[Yale APOLLO Lab](https://apollo-lab-yale.github.io/)**
 
 </div>
 
-<a href="https://vla-bspline.vercel.app/"><img src="website/public/media/cover.png" width="100%" alt="VLA B-Spline: executable language, continuous motion, and an explicit physical clock. Selected results include a 43.7 percentage point clause-training gain on two LIBERO-Long tasks, 1.42× realized CALVIN pace, and 2.68× fewer policy queries on LIBERO Object."></a>
+<!-- <a href="https://vla-bspline.vercel.app/"><img src="website/public/media/cover.png" width="100%" alt="VLA B-Spline: executable language, continuous motion, and an explicit physical clock. Selected results include a 43.7 percentage point clause-training gain on two LIBERO-Long tasks, 1.42× realized CALVIN pace, and 2.68× fewer policy queries on LIBERO Object."></a> -->
 
 A robot policy needs to know **what comes next** and **how long to keep moving**. VLA B-Spline exposes both decisions through one compact action interface. An ordered language program selects the current subgoal; the policy predicts a continuous motion segment separately from its duration. The decoder can then change pace, control rate, and replanning cadence without retraining the vision–language backbone.
 
