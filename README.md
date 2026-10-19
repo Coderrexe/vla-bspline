@@ -4,8 +4,6 @@
 
 # VLA B-Spline
 
-### Language in steps. Motion in curves.
-
 **Event-aligned spline action programs for vision–language–action robot policies**
 
 <table>
@@ -21,7 +19,7 @@ In collaboration with **[Yale APOLLO Lab](https://apollo-lab-yale.github.io/)**
 [**Explore project & watch demos ↗**](https://vla-bspline.vercel.app/)
 
 ![Research](https://img.shields.io/badge/Status-Ongoing_research-173c3a?style=flat-square)
-![Backbone](https://img.shields.io/badge/Backbone-SmolVLA-536d55?style=flat-square)
+<!-- ![Backbone](https://img.shields.io/badge/Backbone-SmolVLA-536d55?style=flat-square) -->
 ![Framework](https://img.shields.io/badge/Framework-PyTorch_%C2%B7_LeRobot-536d55?style=flat-square)
 ![Benchmarks](https://img.shields.io/badge/Evaluation-LIBERO_%C2%B7_CALVIN_%C2%B7_RoboCasa365-536d55?style=flat-square)
 
